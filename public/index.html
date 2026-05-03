@@ -1,0 +1,150 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>兰大生活助手</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="hero">
+        <div>
+          <p class="eyebrow">LZU LIFE ASSISTANT</p>
+          <h1>兰大生活助手</h1>
+          <p class="hero-text">一站式校园生活服务 MVP，覆盖交易、预约、出行、活动与生活圈。</p>
+        </div>
+        <div class="hero-card" id="dashboardCards"></div>
+      </header>
+
+      <main class="content">
+        <section class="panel is-active" data-panel="marketplace">
+          <div class="section-head">
+            <div>
+              <h2>二手市场</h2>
+              <p>发布闲置、分类搜索与商品留言。</p>
+            </div>
+            <form id="marketSearchForm" class="inline-form">
+              <input name="keyword" type="search" placeholder="搜索商品或描述" />
+              <select name="category">
+                <option>全部</option>
+                <option>书籍</option>
+                <option>数码</option>
+                <option>日用</option>
+              </select>
+              <button type="submit">筛选</button>
+            </form>
+          </div>
+
+          <form id="marketCreateForm" class="grid-form">
+            <input name="title" placeholder="商品标题" required />
+            <select name="category" required>
+              <option value="">选择分类</option>
+              <option>书籍</option>
+              <option>数码</option>
+              <option>日用</option>
+            </select>
+            <input name="price" type="number" min="0" placeholder="价格" required />
+            <input name="sellerName" placeholder="卖家昵称" />
+            <input name="imageUrl" placeholder="图片链接（可选）" />
+            <input name="description" placeholder="商品描述" required />
+            <button type="submit">发布商品</button>
+          </form>
+
+          <div id="marketList" class="card-grid"></div>
+        </section>
+
+        <section class="panel" data-panel="booking">
+          <div class="section-head">
+            <div>
+              <h2>场馆预约</h2>
+              <p>展示未来 3 天可预约时段，并支持取消预约。</p>
+            </div>
+          </div>
+          <div id="bookingSummary" class="summary-row"></div>
+          <div id="venueList" class="stack-list"></div>
+        </section>
+
+        <section class="panel" data-panel="transit">
+          <div class="section-head">
+            <div>
+              <h2>便捷出行</h2>
+              <p>校车时刻、余票预订与共享单车站点。</p>
+            </div>
+          </div>
+          <div id="transitList" class="split-grid"></div>
+        </section>
+
+        <section class="panel" data-panel="activities">
+          <div class="section-head">
+            <div>
+              <h2>社团活动</h2>
+              <p>活动发布、报名与名单导出。</p>
+            </div>
+          </div>
+          <form id="activityForm" class="grid-form">
+            <input name="title" placeholder="活动名称" required />
+            <input name="organizer" placeholder="主办社团" required />
+            <input name="location" placeholder="活动地点" required />
+            <input name="time" placeholder="活动时间" required />
+            <input name="capacity" type="number" min="1" placeholder="人数上限" required />
+            <button type="submit">发布活动</button>
+          </form>
+          <div id="activityList" class="stack-list"></div>
+        </section>
+
+        <section class="panel" data-panel="moments">
+          <div class="section-head">
+            <div>
+              <h2>翠英生活圈</h2>
+              <p>发布动态，支持失物招领与问答标签。</p>
+            </div>
+            <form id="momentFilterForm" class="inline-form">
+              <select name="tag">
+                <option>全部</option>
+                <option>校园动态</option>
+                <option>失物招领</option>
+                <option>互助问答</option>
+              </select>
+              <button type="submit">筛选</button>
+            </form>
+          </div>
+          <form id="momentForm" class="grid-form">
+            <input name="author" placeholder="发布者昵称" />
+            <select name="tag" required>
+              <option value="">选择标签</option>
+              <option>校园动态</option>
+              <option>失物招领</option>
+              <option>互助问答</option>
+            </select>
+            <input name="content" placeholder="说点什么…" required />
+            <button type="submit">发布动态</button>
+          </form>
+          <div id="momentList" class="stack-list"></div>
+        </section>
+
+        <section class="panel" data-panel="profile">
+          <div class="section-head">
+            <div>
+              <h2>我的</h2>
+              <p>汇总当前用户的预约、活动和行程状态。</p>
+            </div>
+          </div>
+          <div id="profileView" class="profile-card"></div>
+        </section>
+      </main>
+
+      <nav class="bottom-nav">
+        <button class="nav-item is-active" data-target="marketplace">二手</button>
+        <button class="nav-item" data-target="booking">预约</button>
+        <button class="nav-item" data-target="transit">出行</button>
+        <button class="nav-item" data-target="activities">活动</button>
+        <button class="nav-item" data-target="moments">生活圈</button>
+        <button class="nav-item" data-target="profile">我的</button>
+      </nav>
+    </div>
+
+    <div id="toast" class="toast"></div>
+    <script src="/app.js"></script>
+  </body>
+</html>
