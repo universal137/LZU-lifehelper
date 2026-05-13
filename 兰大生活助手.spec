@@ -1,11 +1,18 @@
 # -*- mode: python ; coding: utf-8 -*-
 
+from pathlib import Path
+
+
+project_root = Path.cwd()
+
 
 a = Analysis(
     ['desktop_app.py'],
     pathex=[],
     binaries=[],
-    datas=[],
+    datas=[
+        (str(project_root / 'desktop' / 'style.qss'), 'desktop'),
+    ],
     hiddenimports=[],
     hookspath=[],
     hooksconfig={},
@@ -36,3 +43,4 @@ exe = EXE(
     codesign_identity=None,
     entitlements_file=None,
 )
+

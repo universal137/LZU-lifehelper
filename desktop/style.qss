@@ -1,0 +1,257 @@
+QWidget {
+    background: {{BG}};
+    color: {{TEXT}};
+    font-family: "Microsoft YaHei UI";
+    font-size: 14px;
+}
+
+QMainWindow {
+    background: {{BG}};
+}
+
+QLabel,
+QFrame > QLabel,
+QWidget > QLabel {
+    background: transparent;
+}
+
+QWidget#contentSurface,
+QWidget#authSurface,
+QWidget#sectionWrap,
+QWidget#textWrap {
+    background: transparent;
+}
+
+QFrame#sidebar {
+    background: {{SIDEBAR}};
+    border: none;
+}
+
+QFrame#authHero {
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
+        stop:0 #0C1626, stop:0.50 {{ACCENT_ALT}}, stop:1 {{ACCENT}});
+    border: none;
+}
+
+QFrame#heroCard,
+QFrame#card,
+QFrame#metricCard,
+QFrame#toast {
+    background: {{CARD}};
+    border: none;
+    border-radius: 16px;
+}
+
+QFrame#metricCard {
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
+        stop:0 {{ACCENT}}, stop:1 {{ACCENT_ALT}});
+}
+
+QLabel#sidebarTitle {
+    background: transparent;
+    color: white;
+    font-size: 24px;
+    font-weight: 600;
+}
+
+QLabel#sidebarSubtitle {
+    background: transparent;
+    color: rgba(255,255,255,0.65);
+    font-size: 13px;
+    font-weight: 400;
+}
+
+QLabel#userBadge {
+    background: rgba(255,255,255,0.06);
+    color: white;
+    border-radius: 16px;
+    padding: 20px;
+    font-size: 13px;
+}
+
+QLabel#authTitle {
+    background: transparent;
+    color: white;
+    font-size: 28px;
+    font-weight: 600;
+}
+
+QLabel#authSubtitle,
+QLabel#authBullet {
+    background: transparent;
+    color: rgba(255,255,255,0.84);
+    font-size: 13px;
+}
+
+QLabel#pageTitle {
+    background: transparent;
+    color: {{TEXT}};
+    font-size: 24px;
+    font-weight: 600;
+}
+
+QLabel#pageSubtitle,
+QLabel#mutedText,
+QLabel#heroHint {
+    background: transparent;
+    color: {{MUTED}};
+    font-size: 13px;
+    font-weight: 400;
+}
+
+QLabel#cardTitle {
+    background: transparent;
+    color: {{TEXT}};
+    font-size: 24px;
+    font-weight: 600;
+}
+
+QLabel#metricTitle {
+    background: transparent;
+    color: rgba(255,255,255,0.82);
+    font-size: 13px;
+}
+
+QLabel#metricValue {
+    background: transparent;
+    color: white;
+    font-size: 24px;
+    font-weight: 600;
+}
+
+QLineEdit,
+QTextEdit,
+QComboBox,
+QListWidget,
+QTableWidget {
+    background: {{CARD}};
+    color: {{TEXT}};
+    border: 1px solid {{BORDER}};
+    border-radius: 16px;
+    padding: 20px;
+    selection-background-color: {{SOFT}};
+    selection-color: {{TEXT}};
+}
+
+QTextEdit {
+    line-height: 1.6;
+}
+
+QListWidget#navList {
+    background: transparent;
+    border: none;
+    color: rgba(255,255,255,0.88);
+    outline: none;
+    padding: 0;
+}
+
+QListWidget#navList::item {
+    background: transparent;
+    padding: 16px 18px;
+    margin: 6px 0;
+    border-radius: 16px;
+}
+
+QListWidget#navList::item:selected {
+    background: rgba(255,255,255,0.12);
+    color: white;
+}
+
+QListWidget#momentList {
+    background: transparent;
+    border: none;
+    outline: none;
+}
+
+QListWidget#momentList::item {
+    background: {{SOFT}};
+    border-radius: 16px;
+    padding: 18px;
+    margin: 0 0 12px 0;
+}
+
+QListWidget#momentList::item:selected {
+    background: rgba(29,78,216,0.10);
+}
+
+QPushButton {
+    background: {{ACCENT_ALT}};
+    color: white;
+    border: none;
+    border-radius: 16px;
+    padding: 12px 20px;
+    font-size: 14px;
+    font-weight: 600;
+}
+
+QPushButton:hover {
+    background: {{ACCENT_ALT_HOVER}};
+}
+
+QPushButton#secondaryButton {
+    background: {{SOFT}};
+    color: {{TEXT}};
+    border: none;
+}
+
+QPushButton#secondaryButton:hover {
+    background: {{SOFT_HOVER}};
+}
+
+QPushButton#chipButton {
+    background: {{SOFT}};
+    color: {{TEXT}};
+    border: none;
+    padding: 10px 16px;
+}
+
+QPushButton#chipButton:hover {
+    background: {{SOFT_HOVER}};
+}
+
+QPushButton#productCard {
+    background: {{CARD}};
+    border: none;
+    border-radius: 16px;
+    text-align: left;
+}
+
+QPushButton#productCard:hover {
+    background: {{CARD_HOVER}};
+}
+
+QHeaderView::section {
+    background: transparent;
+    color: {{MUTED}};
+    border: none;
+    border-bottom: 1px solid {{BORDER}};
+    padding: 14px 12px;
+    font-size: 13px;
+    font-weight: 600;
+}
+
+QLabel#toastBadge {
+    background: {{ACCENT_ALT}};
+    min-width: 28px;
+    min-height: 28px;
+    max-width: 28px;
+    max-height: 28px;
+    border-radius: 14px;
+    color: white;
+    font-weight: 600;
+    qproperty-alignment: AlignCenter;
+}
+
+QLabel#toastTitle {
+    background: transparent;
+    color: {{TEXT}};
+    font-size: 14px;
+    font-weight: 600;
+}
+
+QLabel#toastBody {
+    background: transparent;
+    color: {{MUTED}};
+    font-size: 13px;
+}
+
