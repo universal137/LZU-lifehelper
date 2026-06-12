@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from PySide6.QtCore import QEasingCurve, QPropertyAnimation, Qt, QTimer, Signal
+from PySide6.QtCore import QRectF, Qt, QTimer, Signal
 from PySide6.QtGui import QColor, QFont, QPainter, QPixmap
 from PySide6.QtWidgets import (
     QComboBox,
@@ -10,10 +10,9 @@ from PySide6.QtWidgets import (
     QFileDialog,
     QFormLayout,
     QFrame,
-    QGraphicsDropShadowEffect,
-    QGraphicsOpacityEffect,
     QGridLayout,
     QHBoxLayout,
+    QHeaderView,
     QLabel,
     QLineEdit,
     QListWidget,
@@ -33,12 +32,53 @@ from PySide6.QtWidgets import (
 from desktop.models import APP_ROOT, RESOURCE_ROOT, AppModel
 
 
-def shadow() -> QGraphicsDropShadowEffect:
-    effect = QGraphicsDropShadowEffect()
-    effect.setBlurRadius(30)
-    effect.setOffset(0, 10)
-    effect.setColor(QColor(120, 120, 120, 26))
-    return effect
+ROLE_LABELS = {
+    "student": "学生",
+    "teacher": "老师",
+    "admin": "管理员",
+}
+
+STATUS_LABELS = {
+    "active": "● 正常",
+    "banned": "● 已封禁",
+    "normal": "● 正常",
+    "removed": "● 已下架",
+    "cancelled": "● 已取消",
+    "admin_cancelled": "● 强制取消",
+}
+
+
+def set_primary(button: QPushButton) -> QPushButton:
+    button.setObjectName("primaryBtn")
+    return button
+
+
+def set_danger(button: QPushButton) -> QPushButton:
+    button.setObjectName("dangerBtn")
+    return button
+
+
+def set_secondary(button: QPushButton) -> QPushButton:
+    button.setObjectName("secondaryBtn")
+    return button
+
+
+def card_frame() -> QFrame:
+    frame = QFrame()
+    frame.setObjectName("cardFrame")
+    return frame
+
+
+def status_badge(text: str, status: str) -> QLabel:
+    label = QLabel(text)
+    label.setObjectName("statusBadge")
+    if status in {"active", "normal"}:
+        label.setProperty("tone", "success")
+    elif status in {"banned", "removed", "admin_cancelled", "cancelled"}:
+        label.setProperty("tone", "danger" if status in {"banned", "removed"} else "muted")
+    else:
+        label.setProperty("tone", "muted")
+    return label
 
 
 def product_pixmap(image_path: str | None, width: int, height: int) -> QPixmap:
@@ -49,109 +89,108 @@ def product_pixmap(image_path: str | None, width: int, height: int) -> QPixmap:
             if not pixmap.isNull():
                 return pixmap.scaled(width, height, Qt.KeepAspectRatioByExpanding, Qt.SmoothTransformation)
     pixmap = QPixmap(width, height)
-    pixmap.fill(QColor("#E8EEF7"))
+    pixmap.fill(QColor("#E9ECEF"))
     painter = QPainter(pixmap)
-    painter.setPen(QColor("#7E91AA"))
-    painter.setFont(QFont("Microsoft YaHei UI", 12, QFont.Bold))
+    painter.setRenderHint(QPainter.Antialiasing)
+    painter.setBrush(QColor("#003B7C"))
+    painter.setPen(Qt.NoPen)
+    painter.drawRoundedRect(18, 18, width - 36, height - 36, 18, 18)
+    painter.setPen(QColor("#FFFFFF"))
+    painter.setFont(QFont("Microsoft YaHei", 24, QFont.Bold))
     painter.drawText(pixmap.rect(), Qt.AlignCenter, "LZU")
     painter.end()
     return pixmap
 
 
-class FadeStack(QStackedWidget):
-    def __init__(self) -> None:
-        super().__init__()
-        self._animation: QPropertyAnimation | None = None
-
-    def switch_to(self, index: int) -> None:
-        if index == self.currentIndex():
-            return
-        widget = self.widget(index)
-        if widget is None:
-            return
-        self.setCurrentIndex(index)
-        effect = QGraphicsOpacityEffect(widget)
-        widget.setGraphicsEffect(effect)
-        animation = QPropertyAnimation(effect, b"opacity", self)
-        animation.setDuration(200)
-        animation.setStartValue(0.0)
-        animation.setEndValue(1.0)
-        animation.setEasingCurve(QEasingCurve.OutCubic)
-        animation.finished.connect(lambda: widget.setGraphicsEffect(None))
-        animation.start()
-        self._animation = animation
-
-
 class Toast(QFrame):
-    def __init__(self, parent: QWidget, message: str, tone: str) -> None:
+    def __init__(self, parent: QWidget, message: str, success: bool = True) -> None:
         super().__init__(parent)
         self.setObjectName("toast")
-        self.setWindowFlags(Qt.SubWindow | Qt.FramelessWindowHint)
-        self.setAttribute(Qt.WA_ShowWithoutActivating)
-        self.setGraphicsEffect(shadow())
         layout = QHBoxLayout(self)
-        layout.setContentsMargins(16, 14, 16, 14)
-        badge = QLabel("✓" if tone == "success" else "!")
-        badge.setObjectName("toastBadge")
-        title = QLabel("操作成功" if tone == "success" else "操作提示")
-        title.setObjectName("toastTitle")
-        body = QLabel(message)
-        body.setObjectName("toastBody")
-        body.setWordWrap(True)
-        text = QVBoxLayout()
-        text.addWidget(title)
-        text.addWidget(body)
-        layout.addWidget(badge)
-        layout.addLayout(text)
-        self.opacity = QGraphicsOpacityEffect(self)
-        self.setGraphicsEffect(self.opacity)
-        self.animation = QPropertyAnimation(self.opacity, b"opacity", self)
-        self.animation.setDuration(200)
-        self.animation.setStartValue(0.0)
-        self.animation.setEndValue(1.0)
-        self.animation.start()
-        QTimer.singleShot(2200, self.fade_out)
-
-    def showEvent(self, event) -> None:
-        super().showEvent(event)
+        layout.setContentsMargins(14, 12, 14, 12)
+        icon = QLabel("✓" if success else "!")
+        icon.setObjectName("toastIcon")
+        icon.setProperty("tone", "success" if success else "danger")
+        text = QLabel(message)
+        text.setObjectName("toastText")
+        text.setWordWrap(True)
+        layout.addWidget(icon)
+        layout.addWidget(text)
         self.adjustSize()
-        self.move(self.parentWidget().width() - self.width() - 20, 20)
+        self.move(parent.width() - self.width() - 24, 24)
+        QTimer.singleShot(2200, self.deleteLater)
 
-    def fade_out(self) -> None:
-        self.animation = QPropertyAnimation(self.opacity, b"opacity", self)
-        self.animation.setDuration(200)
-        self.animation.setStartValue(1.0)
-        self.animation.setEndValue(0.0)
-        self.animation.finished.connect(self.deleteLater)
-        self.animation.start()
+
+class BarChart(QWidget):
+    def __init__(self) -> None:
+        super().__init__()
+        self.rows: list[dict] = []
+        self.setMinimumHeight(230)
+
+    def set_data(self, rows: list[dict]) -> None:
+        self.rows = rows
+        self.update()
+
+    def paintEvent(self, event) -> None:
+        super().paintEvent(event)
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.Antialiasing)
+        rect = self.rect().adjusted(22, 22, -22, -34)
+        painter.setPen(QColor("#DEE2E6"))
+        painter.drawLine(rect.bottomLeft(), rect.bottomRight())
+        if not self.rows:
+            painter.setPen(QColor("#6C757D"))
+            painter.drawText(rect, Qt.AlignCenter, "暂无统计数据")
+            painter.end()
+            return
+        max_value = max([row["total"] for row in self.rows] + [1])
+        gap = 16
+        bar_width = max(34, int((rect.width() - gap * (len(self.rows) - 1)) / len(self.rows)))
+        for index, row in enumerate(self.rows):
+            value = row["total"]
+            height = int(rect.height() * (value / max_value)) if max_value else 0
+            x = rect.left() + index * (bar_width + gap)
+            y = rect.bottom() - height
+            bar_rect = QRectF(x, y, bar_width, height)
+            painter.setBrush(QColor("#00A896"))
+            painter.setPen(Qt.NoPen)
+            painter.drawRoundedRect(bar_rect, 5, 5)
+            painter.setPen(QColor("#212529"))
+            painter.setFont(QFont("Microsoft YaHei", 10, QFont.Bold))
+            painter.drawText(QRectF(x, y - 26, bar_width, 20), Qt.AlignCenter, str(value))
+            painter.setPen(QColor("#6C757D"))
+            painter.setFont(QFont("Microsoft YaHei", 8))
+            painter.drawText(QRectF(x - 10, rect.bottom() + 6, bar_width + 20, 24), Qt.AlignCenter, row["name"][:6])
+        painter.end()
 
 
 class ProductDialog(QDialog):
-    def __init__(self, parent: QWidget) -> None:
+    def __init__(self, parent: QWidget, model: AppModel) -> None:
         super().__init__(parent)
+        self.model = model
         self.image_path: str | None = None
         self.setWindowTitle("发布商品")
-        self.resize(460, 460)
+        self.resize(460, 430)
         layout = QFormLayout(self)
         self.title_input = QLineEdit()
         self.category_input = QComboBox()
-        self.category_input.addItems(["书籍", "运动", "数码", "日用", "资料", "家居", "器材"])
+        self.category_input.addItems(self.model.product_categories()[1:])
         self.campus_input = QComboBox()
         self.campus_input.addItems(["榆中校区", "城关校区"])
         self.price_input = QLineEdit()
         self.desc_input = QTextEdit()
         self.image_label = QLabel("未选择图片")
-        image_button = QPushButton("选择图片")
-        image_button.clicked.connect(self.pick_image)
-        submit_button = QPushButton("确认发布")
-        submit_button.clicked.connect(self.accept)
+        pick = set_secondary(QPushButton("选择图片"))
+        pick.clicked.connect(self.pick_image)
+        submit = set_primary(QPushButton("确认发布"))
+        submit.clicked.connect(self.accept)
         layout.addRow("标题", self.title_input)
         layout.addRow("分类", self.category_input)
         layout.addRow("校区", self.campus_input)
         layout.addRow("价格", self.price_input)
         layout.addRow("描述", self.desc_input)
-        layout.addRow(self.image_label, image_button)
-        layout.addRow(submit_button)
+        layout.addRow(self.image_label, pick)
+        layout.addRow(submit)
 
     def pick_image(self) -> None:
         file_path, _ = QFileDialog.getOpenFileName(self, "选择图片", str(APP_ROOT), "Images (*.png *.jpg *.jpeg *.bmp)")
@@ -161,49 +200,51 @@ class ProductDialog(QDialog):
 
 
 class ActivityDialog(QDialog):
-    def __init__(self, parent: QWidget) -> None:
+    def __init__(self, parent: QWidget, model: AppModel) -> None:
         super().__init__(parent)
+        self.model = model
         self.setWindowTitle("发布活动")
-        self.resize(480, 420)
+        self.resize(480, 390)
         layout = QFormLayout(self)
         self.title_input = QLineEdit()
         self.category_input = QComboBox()
-        self.category_input.addItems(["公益", "体育", "学术", "文艺", "成长"])
+        self.category_input.addItems(self.model.activity_categories()[1:])
         self.location_input = QLineEdit()
         self.time_input = QLineEdit()
-        self.time_input.setPlaceholderText("例如 2026-05-20 19:00")
+        self.time_input.setPlaceholderText("例如 2026-06-20 19:00")
         self.capacity_input = QLineEdit()
         self.summary_input = QTextEdit()
-        submit_button = QPushButton("发布活动")
-        submit_button.clicked.connect(self.accept)
+        submit = set_primary(QPushButton("发布活动"))
+        submit.clicked.connect(self.accept)
         layout.addRow("标题", self.title_input)
         layout.addRow("分类", self.category_input)
         layout.addRow("地点", self.location_input)
         layout.addRow("时间", self.time_input)
-        layout.addRow("上限", self.capacity_input)
+        layout.addRow("人数上限", self.capacity_input)
         layout.addRow("简介", self.summary_input)
-        layout.addRow(submit_button)
+        layout.addRow(submit)
 
 
 class MomentDialog(QDialog):
-    def __init__(self, parent: QWidget) -> None:
+    def __init__(self, parent: QWidget, model: AppModel) -> None:
         super().__init__(parent)
+        self.model = model
         self.image_path: str | None = None
         self.setWindowTitle("发布动态")
-        self.resize(460, 360)
+        self.resize(460, 330)
         layout = QFormLayout(self)
         self.category_input = QComboBox()
-        self.category_input.addItems(["全部", "失物招领", "吐槽问答", "活动"])
+        self.category_input.addItems(self.model.moment_categories()[1:])
         self.content_input = QTextEdit()
         self.image_label = QLabel("未选择图片")
-        image_button = QPushButton("附加图片")
-        image_button.clicked.connect(self.pick_image)
-        submit_button = QPushButton("发布动态")
-        submit_button.clicked.connect(self.accept)
+        pick = set_secondary(QPushButton("附加图片"))
+        pick.clicked.connect(self.pick_image)
+        submit = set_primary(QPushButton("发布动态"))
+        submit.clicked.connect(self.accept)
         layout.addRow("分类", self.category_input)
         layout.addRow("内容", self.content_input)
-        layout.addRow(self.image_label, image_button)
-        layout.addRow(submit_button)
+        layout.addRow(self.image_label, pick)
+        layout.addRow(submit)
 
     def pick_image(self) -> None:
         file_path, _ = QFileDialog.getOpenFileName(self, "选择图片", str(APP_ROOT), "Images (*.png *.jpg *.jpeg *.bmp)")
@@ -213,26 +254,142 @@ class MomentDialog(QDialog):
 
 
 class CommentDialog(QDialog):
-    def __init__(self, parent: QWidget) -> None:
+    def __init__(self, parent: QWidget, title: str = "发表评论", prompt: str = "填写内容") -> None:
         super().__init__(parent)
-        self.setWindowTitle("发表评论")
-        self.resize(360, 220)
+        self.setWindowTitle(title)
+        self.resize(380, 230)
         layout = QVBoxLayout(self)
+        label = QLabel(prompt)
+        label.setObjectName("dialogHint")
         self.content_input = QTextEdit()
-        submit_button = QPushButton("提交评论")
-        submit_button.clicked.connect(self.accept)
+        submit = set_primary(QPushButton("提交"))
+        submit.clicked.connect(self.accept)
+        layout.addWidget(label)
         layout.addWidget(self.content_input)
-        layout.addWidget(submit_button)
+        layout.addWidget(submit)
+
+
+class ConfirmDialog(QDialog):
+    def __init__(self, parent: QWidget, title: str, message: str, danger: bool = False) -> None:
+        super().__init__(parent)
+        self.setWindowTitle(title)
+        self.resize(420, 220)
+        layout = QVBoxLayout(self)
+        header = QLabel(title)
+        header.setObjectName("dialogTitle")
+        body = QLabel(message)
+        body.setObjectName("dialogBody")
+        body.setWordWrap(True)
+        buttons = QHBoxLayout()
+        cancel = set_secondary(QPushButton("返回"))
+        ok = set_danger(QPushButton("确认执行")) if danger else set_primary(QPushButton("确认"))
+        cancel.clicked.connect(self.reject)
+        ok.clicked.connect(self.accept)
+        buttons.addStretch(1)
+        buttons.addWidget(cancel)
+        buttons.addWidget(ok)
+        layout.addWidget(header)
+        layout.addWidget(body)
+        layout.addStretch(1)
+        layout.addLayout(buttons)
+
+
+class ReasonDialog(QDialog):
+    def __init__(self, parent: QWidget, title: str, message: str, placeholder: str = "填写操作原因，便于留痕") -> None:
+        super().__init__(parent)
+        self.setWindowTitle(title)
+        self.resize(500, 320)
+        layout = QVBoxLayout(self)
+        header = QLabel(title)
+        header.setObjectName("dialogTitle")
+        body = QLabel(message)
+        body.setObjectName("dialogBody")
+        body.setWordWrap(True)
+        self.reason_input = QTextEdit()
+        self.reason_input.setPlaceholderText(placeholder)
+        buttons = QHBoxLayout()
+        cancel = set_secondary(QPushButton("取消"))
+        ok = set_danger(QPushButton("确认并记录"))
+        cancel.clicked.connect(self.reject)
+        ok.clicked.connect(self.accept)
+        buttons.addStretch(1)
+        buttons.addWidget(cancel)
+        buttons.addWidget(ok)
+        layout.addWidget(header)
+        layout.addWidget(body)
+        layout.addWidget(self.reason_input, 1)
+        layout.addLayout(buttons)
+
+    def reason(self) -> str:
+        return self.reason_input.toPlainText().strip()
+
+
+class DetailDialog(QDialog):
+    def __init__(self, parent: QWidget, title: str, subtitle: str = "", status_text: str = "", status: str = "normal") -> None:
+        super().__init__(parent)
+        self.setWindowTitle(title)
+        self.resize(720, 560)
+        self.root = QVBoxLayout(self)
+        self.root.setContentsMargins(20, 20, 20, 20)
+        self.root.setSpacing(14)
+        header = QHBoxLayout()
+        title_box = QVBoxLayout()
+        title_label = QLabel(title)
+        title_label.setObjectName("dialogTitle")
+        title_box.addWidget(title_label)
+        if subtitle:
+            sub = QLabel(subtitle)
+            sub.setObjectName("mutedText")
+            title_box.addWidget(sub)
+        header.addLayout(title_box, 1)
+        if status_text:
+            header.addWidget(status_badge(status_text, status))
+        self.root.addLayout(header)
+
+    def add_meta_grid(self, items: list[tuple[str, str]]) -> None:
+        frame = QFrame()
+        frame.setObjectName("detailMeta")
+        grid = QGridLayout(frame)
+        grid.setContentsMargins(14, 12, 14, 12)
+        grid.setHorizontalSpacing(18)
+        grid.setVerticalSpacing(8)
+        for index, (label, value) in enumerate(items):
+            k = QLabel(label)
+            k.setObjectName("metaLabel")
+            v = QLabel(value)
+            v.setObjectName("metaValue")
+            grid.addWidget(k, index // 2 * 2, index % 2)
+            grid.addWidget(v, index // 2 * 2 + 1, index % 2)
+        self.root.addWidget(frame)
+
+    def add_section(self, title: str, text: str, min_height: int = 90) -> QTextEdit:
+        label = QLabel(title)
+        label.setObjectName("sectionTitle")
+        box = QTextEdit()
+        box.setReadOnly(True)
+        box.setMinimumHeight(min_height)
+        box.setPlainText(text)
+        self.root.addWidget(label)
+        self.root.addWidget(box)
+        return box
+
+    def add_actions(self, actions: list[tuple[str, callable, str]]) -> None:
+        buttons = QHBoxLayout()
+        buttons.addStretch(1)
+        for text, handler, tone in actions:
+            button = set_danger(QPushButton(text)) if tone == "danger" else set_primary(QPushButton(text)) if tone == "primary" else set_secondary(QPushButton(text))
+            button.clicked.connect(handler)
+            buttons.addWidget(button)
+        self.root.addLayout(buttons)
 
 
 class AuthPage(QWidget):
     login_success = Signal()
-    notify = Signal(str, str)
+    notify = Signal(str, bool)
 
     def __init__(self, model: AppModel) -> None:
         super().__init__()
         self.model = model
-        self.stack = FadeStack()
         self._build_ui()
 
     def _build_ui(self) -> None:
@@ -240,640 +397,596 @@ class AuthPage(QWidget):
         root.setContentsMargins(0, 0, 0, 0)
         root.setSpacing(0)
 
-        hero = QFrame()
-        hero.setObjectName("authHero")
-        hero_layout = QVBoxLayout(hero)
-        hero_layout.setContentsMargins(60, 60, 60, 60)
+        visual = QFrame()
+        visual.setObjectName("loginVisual")
+        visual.setMinimumWidth(420)
+        visual_layout = QVBoxLayout(visual)
+        visual_layout.setContentsMargins(46, 48, 46, 48)
+        logo = QLabel("LZU")
+        logo.setObjectName("loginLogo")
         title = QLabel("兰大生活助手")
-        title.setObjectName("authTitle")
-        subtitle = QLabel("Apple-style 极简桌面端，聚合交易、预约、出行、活动和生活圈。")
-        subtitle.setObjectName("authSubtitle")
+        title.setObjectName("loginHeroTitle")
+        subtitle = QLabel("二手市场、场馆预约、校园出行、活动报名与生活圈的一站式桌面工作台")
+        subtitle.setObjectName("loginHeroSubtitle")
         subtitle.setWordWrap(True)
-        hero_layout.addWidget(title)
-        hero_layout.addWidget(subtitle)
-        for text in [
-            "透明背景与柔和阴影，消除默认 Qt 白框。",
-            "SQLite 本地持久化，开箱即用，离线可运行。",
-            "列表到详情页多级跳转，支持局部刷新。",
-        ]:
-            label = QLabel(f"• {text}")
-            label.setObjectName("authBullet")
-            label.setWordWrap(True)
-            hero_layout.addWidget(label)
-        hero_layout.addStretch(1)
+        visual_layout.addWidget(logo, 0, Qt.AlignLeft)
+        visual_layout.addStretch(1)
+        visual_layout.addWidget(title)
+        visual_layout.addWidget(subtitle)
+        visual_layout.addStretch(2)
 
-        right = QWidget()
-        right.setObjectName("authSurface")
-        right_layout = QVBoxLayout(right)
-        right_layout.setContentsMargins(60, 50, 60, 50)
-        right_layout.addStretch(1)
-        right_layout.addWidget(self._build_cards())
-        right_layout.addStretch(1)
-
-        root.addWidget(hero, 5)
-        root.addWidget(right, 4)
-
-    def _build_cards(self) -> QWidget:
-        wrap = QWidget()
-        wrap.setObjectName("contentSurface")
-        layout = QVBoxLayout(wrap)
-        layout.addWidget(self.stack)
-        self.stack.addWidget(self._build_login_card())
-        self.stack.addWidget(self._build_register_card())
-        self.stack.setCurrentIndex(0)
-        return wrap
-
-    def _build_login_card(self) -> QWidget:
-        card = QFrame()
-        card.setObjectName("card")
-        card.setGraphicsEffect(shadow())
-        layout = QVBoxLayout(card)
-        layout.setContentsMargins(20, 20, 20, 20)
-        layout.setSpacing(15)
-
-        title = QLabel("登录")
-        title.setObjectName("cardTitle")
-        desc = QLabel("演示账号：学生 20230001 / lzu123456，教师 teacher01 / lzu123456，管理员 admin01 / admin123456")
+        form_wrap = QWidget()
+        form_wrap.setObjectName("loginFormWrap")
+        form_layout = QVBoxLayout(form_wrap)
+        form_layout.setContentsMargins(86, 70, 86, 70)
+        form_layout.setSpacing(16)
+        title2 = QLabel("登录系统")
+        title2.setObjectName("pageTitle")
+        desc = QLabel("输入账号密码后，系统会自动根据身份进入用户端或管理端。")
         desc.setObjectName("mutedText")
-        desc.setWordWrap(True)
-        self.login_username = QLineEdit()
-        self.login_username.setPlaceholderText("账号")
-        self.login_password = QLineEdit()
-        self.login_password.setPlaceholderText("密码")
-        self.login_password.setEchoMode(QLineEdit.Password)
-        self.login_password.returnPressed.connect(self.submit_login)
-
+        self.username_input = QLineEdit()
+        self.username_input.setPlaceholderText("账号")
+        self.password_input = QLineEdit()
+        self.password_input.setPlaceholderText("密码")
+        self.password_input.setEchoMode(QLineEdit.Password)
+        self.password_input.returnPressed.connect(self.submit_login)
+        login_btn = set_primary(QPushButton("登录"))
+        login_btn.clicked.connect(self.submit_login)
+        demo_title = QLabel("演示账号")
+        demo_title.setObjectName("sectionTitle")
         demo_row = QHBoxLayout()
         for label, username, password in [
             ("学生", "20230001", "lzu123456"),
-            ("教师", "teacher01", "lzu123456"),
+            ("老师", "teacher01", "lzu123456"),
             ("管理员", "admin01", "admin123456"),
         ]:
-            button = QPushButton(label)
-            button.setObjectName("chipButton")
+            button = set_secondary(QPushButton(label))
             button.clicked.connect(lambda _checked=False, u=username, p=password: self.fill_demo(u, p))
             demo_row.addWidget(button)
+        register_title = QLabel("注册普通账号")
+        register_title.setObjectName("sectionTitle")
+        self.reg_username = QLineEdit()
+        self.reg_username.setPlaceholderText("新账号")
+        self.reg_name = QLineEdit()
+        self.reg_name.setPlaceholderText("显示姓名")
+        self.reg_password = QLineEdit()
+        self.reg_password.setPlaceholderText("密码至少 8 位")
+        self.reg_password.setEchoMode(QLineEdit.Password)
+        self.reg_role = QComboBox()
+        self.reg_role.addItems(["student", "teacher"])
+        self.reg_college = QLineEdit()
+        self.reg_college.setPlaceholderText("学院 / 单位")
+        register_btn = set_secondary(QPushButton("完成注册"))
+        register_btn.clicked.connect(self.submit_register)
 
-        login_button = QPushButton("进入工作台")
-        login_button.clicked.connect(self.submit_login)
-        register_button = QPushButton("没有账号？去注册")
-        register_button.setObjectName("secondaryButton")
-        register_button.clicked.connect(lambda: self.stack.switch_to(1))
+        form_layout.addWidget(title2)
+        form_layout.addWidget(desc)
+        form_layout.addSpacing(10)
+        form_layout.addWidget(self.username_input)
+        form_layout.addWidget(self.password_input)
+        form_layout.addWidget(login_btn)
+        form_layout.addSpacing(10)
+        form_layout.addWidget(demo_title)
+        form_layout.addLayout(demo_row)
+        form_layout.addSpacing(12)
+        form_layout.addWidget(register_title)
+        form_layout.addWidget(self.reg_username)
+        form_layout.addWidget(self.reg_name)
+        form_layout.addWidget(self.reg_password)
+        form_layout.addWidget(self.reg_role)
+        form_layout.addWidget(self.reg_college)
+        form_layout.addWidget(register_btn)
+        form_layout.addStretch(1)
 
-        layout.addWidget(title)
-        layout.addWidget(desc)
-        layout.addWidget(self.login_username)
-        layout.addWidget(self.login_password)
-        layout.addLayout(demo_row)
-        layout.addWidget(login_button)
-        layout.addWidget(register_button)
-        return card
-
-    def _build_register_card(self) -> QWidget:
-        card = QFrame()
-        card.setObjectName("card")
-        card.setGraphicsEffect(shadow())
-        layout = QVBoxLayout(card)
-        layout.setContentsMargins(20, 20, 20, 20)
-        layout.setSpacing(15)
-
-        title = QLabel("注册")
-        title.setObjectName("cardTitle")
-        self.register_username = QLineEdit()
-        self.register_username.setPlaceholderText("新账号")
-        self.register_name = QLineEdit()
-        self.register_name.setPlaceholderText("显示名称")
-        self.register_password = QLineEdit()
-        self.register_password.setPlaceholderText("密码，至少 8 位")
-        self.register_password.setEchoMode(QLineEdit.Password)
-        self.register_role = QComboBox()
-        self.register_role.addItems(["student", "teacher"])
-        self.register_college = QLineEdit()
-        self.register_college.setPlaceholderText("学院 / 单位")
-
-        register_button = QPushButton("完成注册")
-        register_button.clicked.connect(self.submit_register)
-        back_button = QPushButton("返回登录")
-        back_button.setObjectName("secondaryButton")
-        back_button.clicked.connect(lambda: self.stack.switch_to(0))
-
-        layout.addWidget(title)
-        layout.addWidget(self.register_username)
-        layout.addWidget(self.register_name)
-        layout.addWidget(self.register_password)
-        layout.addWidget(self.register_role)
-        layout.addWidget(self.register_college)
-        layout.addWidget(register_button)
-        layout.addWidget(back_button)
-        return card
+        root.addWidget(visual, 4)
+        root.addWidget(form_wrap, 6)
 
     def fill_demo(self, username: str, password: str) -> None:
-        self.login_username.setText(username)
-        self.login_password.setText(password)
+        self.username_input.setText(username)
+        self.password_input.setText(password)
 
     def submit_login(self) -> None:
-        success, message = self.model.authenticate(self.login_username.text().strip(), self.login_password.text())
-        self.notify.emit(message, "success" if success else "error")
-        if success:
+        ok, message = self.model.authenticate(self.username_input.text().strip(), self.password_input.text())
+        self.notify.emit(message, ok)
+        if ok:
             self.login_success.emit()
 
     def submit_register(self) -> None:
-        success, message = self.model.register_user(
-            self.register_username.text().strip(),
-            self.register_name.text().strip(),
-            self.register_password.text(),
-            self.register_role.currentText(),
-            self.register_college.text().strip() or "未填写",
+        ok, message = self.model.register_user(
+            self.reg_username.text().strip(),
+            self.reg_name.text().strip(),
+            self.reg_password.text(),
+            self.reg_role.currentText(),
+            self.reg_college.text().strip(),
         )
-        self.notify.emit(message, "success" if success else "error")
-        if success:
-            self.login_username.setText(self.register_username.text().strip())
-            self.login_password.clear()
-            self.register_username.clear()
-            self.register_name.clear()
-            self.register_password.clear()
-            self.register_college.clear()
-            self.stack.switch_to(0)
+        self.notify.emit(message, ok)
+        if ok:
+            self.reg_username.clear()
+            self.reg_name.clear()
+            self.reg_password.clear()
+            self.reg_college.clear()
 
 
 class MainWindow(QMainWindow):
     def __init__(self, model: AppModel) -> None:
         super().__init__()
         self.model = model
-        self.current_theme = "light"
-        self.current_product_id: int | None = None
-        self.current_activity_id: int | None = None
-        self.current_booking_id: int | None = None
-        self.current_moment_id: int | None = None
-        self.current_moment_filter = "全部"
-        self.market_scroll_value = 0
-
-        self.root_stack = FadeStack()
-        self.page_stack = FadeStack()
-        self.market_stack = FadeStack()
         self.setWindowTitle("兰大生活助手")
-        self.resize(1520, 960)
-        self.setMinimumSize(1280, 840)
+        self.resize(1100, 700)
+        self.setMinimumSize(1100, 700)
+        self.root_stack = QStackedWidget()
+        self.user_nav: QListWidget | None = None
+        self.admin_nav: QListWidget | None = None
+        self.user_pages: QStackedWidget | None = None
+        self.admin_pages: QStackedWidget | None = None
+        self.current_product_id: int | None = None
+        self.current_booking_id: int | None = None
+        self.current_route_id: int | None = None
+        self.current_activity_id: int | None = None
+        self.current_moment_id: int | None = None
+        self.current_admin_ids: dict[str, int | None] = {}
         self._build_ui()
 
     def _build_ui(self) -> None:
         self.auth_page = AuthPage(self.model)
-        self.auth_page.login_success.connect(self.enter_workspace)
+        self.auth_page.login_success.connect(self.enter_after_login)
         self.auth_page.notify.connect(self.show_toast)
-        self.workspace_page = self._build_workspace_page()
         self.root_stack.addWidget(self.auth_page)
-        self.root_stack.addWidget(self.workspace_page)
         self.setCentralWidget(self.root_stack)
 
-    def _build_workspace_page(self) -> QWidget:
+    def apply_theme(self) -> None:
+        qss_path = RESOURCE_ROOT / "desktop" / "style.qss"
+        if qss_path.exists():
+            self.setStyleSheet(qss_path.read_text(encoding="utf-8"))
+
+    def show_toast(self, message: str, success: bool = True) -> None:
+        toast = Toast(self, message, success)
+        toast.show()
+
+    def enter_after_login(self) -> None:
+        user = self.model.require_user()
+        if user.role == "admin":
+            self.admin_page = self._build_admin_shell()
+            self.root_stack.addWidget(self.admin_page)
+            self.root_stack.setCurrentWidget(self.admin_page)
+            self.refresh_admin_all()
+        else:
+            self.user_page = self._build_user_shell()
+            self.root_stack.addWidget(self.user_page)
+            self.root_stack.setCurrentWidget(self.user_page)
+            self.refresh_user_all()
+
+    def logout(self) -> None:
+        self.model.logout()
+        self.root_stack.setCurrentWidget(self.auth_page)
+
+    def _build_sidebar(self, admin: bool = False) -> QFrame:
+        user = self.model.require_user()
+        side = QFrame()
+        side.setObjectName("adminSidebar" if admin else "userSidebar")
+        side.setFixedWidth(200)
+        layout = QVBoxLayout(side)
+        layout.setContentsMargins(16, 18, 16, 18)
+        layout.setSpacing(14)
+        brand = QLabel("兰大助手")
+        brand.setObjectName("sidebarBrand")
+        info = QLabel(f"{user.display_name}\n{ROLE_LABELS.get(user.role, user.role)} · {user.college}")
+        info.setObjectName("sidebarUser")
+        info.setWordWrap(True)
+        nav = QListWidget()
+        nav.setObjectName("navList")
+        nav.setSpacing(4)
+        if admin:
+            for item in ["数据总览", "用户管理", "商品管理", "预约管理", "活动管理", "生活圈审核", "操作日志"]:
+                nav.addItem(QListWidgetItem(item))
+            self.admin_nav = nav
+        else:
+            for item in ["首页概览", "二手市场", "场馆预约", "校园出行", "活动中心", "生活圈", "个人中心"]:
+                nav.addItem(QListWidgetItem(item))
+            self.user_nav = nav
+        logout = set_secondary(QPushButton("退出登录"))
+        logout.clicked.connect(self.logout)
+        layout.addWidget(brand)
+        layout.addWidget(info)
+        layout.addWidget(nav, 1)
+        layout.addWidget(logout)
+        return side
+
+    def _shell_page(self, sidebar: QFrame, stack: QStackedWidget) -> QWidget:
         page = QWidget()
-        page.setObjectName("contentSurface")
         layout = QHBoxLayout(page)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
-        layout.addWidget(self._build_sidebar(), 0)
-        layout.addWidget(self._build_body(), 1)
+        layout.addWidget(sidebar)
+        layout.addWidget(stack, 1)
         return page
 
-    def _build_sidebar(self) -> QWidget:
-        sidebar = QFrame()
-        sidebar.setObjectName("sidebar")
-        sidebar.setFixedWidth(250)
-        layout = QVBoxLayout(sidebar)
-        layout.setContentsMargins(20, 24, 20, 24)
-        layout.setSpacing(15)
-
-        title = QLabel("兰大生活助手")
-        title.setObjectName("sidebarTitle")
-        subtitle = QLabel("LZU LIFE DESKTOP")
-        subtitle.setObjectName("sidebarSubtitle")
-        self.user_badge = QLabel("")
-        self.user_badge.setObjectName("userBadge")
-        self.user_badge.setWordWrap(True)
-
-        self.nav_list = QListWidget()
-        self.nav_list.setObjectName("navList")
-        for text in ["首页", "二手市场", "场馆预约", "校园出行", "社团活动", "生活圈", "个人中心"]:
-            QListWidgetItem(text, self.nav_list)
-        self.nav_list.currentRowChanged.connect(self.change_page)
-
-        theme_button = QPushButton("切换深浅主题")
-        theme_button.setObjectName("secondaryButton")
-        theme_button.clicked.connect(self.toggle_theme)
-        logout_button = QPushButton("退出登录")
-        logout_button.setObjectName("secondaryButton")
-        logout_button.clicked.connect(self.logout)
-
-        layout.addWidget(title)
-        layout.addWidget(subtitle)
-        layout.addWidget(self.user_badge)
-        layout.addWidget(self.nav_list, 1)
-        layout.addWidget(theme_button)
-        layout.addWidget(logout_button)
-        return sidebar
-
-    def _build_body(self) -> QWidget:
-        body = QWidget()
-        body.setObjectName("contentSurface")
-        layout = QVBoxLayout(body)
-        layout.setContentsMargins(24, 22, 24, 22)
-        layout.setSpacing(15)
-
-        hero = QFrame()
-        hero.setObjectName("heroCard")
-        hero.setGraphicsEffect(shadow())
-        hero_layout = QHBoxLayout(hero)
-        hero_layout.setContentsMargins(20, 20, 20, 20)
-        title_wrap = QVBoxLayout()
-        title_wrap.setSpacing(6)
-        self.header_title = QLabel("首页")
-        self.header_title.setObjectName("pageTitle")
-        self.header_desc = QLabel("查看核心数据、最近商品和近期活动。")
-        self.header_desc.setObjectName("pageSubtitle")
-        title_wrap.addWidget(self.header_title)
-        title_wrap.addWidget(self.header_desc)
-        self.header_hint = QLabel("Apple-style / SQLite / PySide6")
-        self.header_hint.setObjectName("heroHint")
-        self.header_hint.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
-        hero_layout.addLayout(title_wrap, 1)
-        hero_layout.addWidget(self.header_hint)
-
-        self.page_stack.addWidget(self._build_home_page())
-        self.page_stack.addWidget(self._build_market_page())
-        self.page_stack.addWidget(self._build_booking_page())
-        self.page_stack.addWidget(self._build_bus_page())
-        self.page_stack.addWidget(self._build_activity_page())
-        self.page_stack.addWidget(self._build_moment_page())
-        self.page_stack.addWidget(self._build_profile_page())
-
-        layout.addWidget(hero)
-        layout.addWidget(self.page_stack, 1)
-        return body
-
-    def _build_home_page(self) -> QWidget:
+    def _content_page(self, title: str, subtitle: str = "") -> tuple[QWidget, QVBoxLayout]:
         page = QWidget()
-        page.setObjectName("contentSurface")
+        page.setObjectName("contentPage")
         layout = QVBoxLayout(page)
-        layout.setSpacing(15)
+        layout.setContentsMargins(24, 22, 24, 22)
+        layout.setSpacing(14)
+        top = QVBoxLayout()
+        label = QLabel(title)
+        label.setObjectName("pageTitle")
+        top.addWidget(label)
+        if subtitle:
+            sub = QLabel(subtitle)
+            sub.setObjectName("mutedText")
+            top.addWidget(sub)
+        layout.addLayout(top)
+        return page, layout
 
-        top_grid = QGridLayout()
-        top_grid.setSpacing(15)
-        self.stat_labels: dict[str, QLabel] = {}
-        stats = [("products", "在售商品数"), ("bookings", "我的预约"), ("activities", "已报活动"), ("moments", "生活圈动态")]
-        for index, (key, title_text) in enumerate(stats):
-            card = QFrame()
-            card.setObjectName("metricCard")
-            card.setGraphicsEffect(shadow())
-            inner = QVBoxLayout(card)
-            inner.setContentsMargins(20, 20, 20, 20)
-            title = QLabel(title_text)
-            title.setObjectName("metricTitle")
-            value = QLabel("0")
-            value.setObjectName("metricValue")
-            inner.addWidget(title)
-            inner.addStretch(1)
-            inner.addWidget(value)
-            top_grid.addWidget(card, 0, index)
-            self.stat_labels[key] = value
+    def _scroll_grid_page(self, title: str, subtitle: str = "") -> tuple[QWidget, QVBoxLayout]:
+        page, layout = self._content_page(title, subtitle)
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        body = QWidget()
+        body_layout = QVBoxLayout(body)
+        body_layout.setContentsMargins(0, 0, 0, 0)
+        body_layout.setSpacing(12)
+        scroll.setWidget(body)
+        layout.addWidget(scroll, 1)
+        return page, body_layout
 
-        bottom = QHBoxLayout()
-        bottom.setSpacing(15)
-        self.home_products_card = self._text_card("最近上架")
-        self.home_activities_card = self._text_card("近期活动")
-        bottom.addWidget(self.home_products_card, 1)
-        bottom.addWidget(self.home_activities_card, 1)
+    def _build_user_shell(self) -> QWidget:
+        self.user_pages = QStackedWidget()
+        self.user_pages.addWidget(self._build_user_home())
+        self.user_pages.addWidget(self._build_market_page())
+        self.user_pages.addWidget(self._build_booking_page())
+        self.user_pages.addWidget(self._build_transit_page())
+        self.user_pages.addWidget(self._build_activity_page())
+        self.user_pages.addWidget(self._build_moment_page())
+        self.user_pages.addWidget(self._build_profile_page())
+        sidebar = self._build_sidebar(admin=False)
+        assert self.user_nav is not None
+        self.user_nav.currentRowChanged.connect(self.user_pages.setCurrentIndex)
+        self.user_nav.setCurrentRow(0)
+        return self._shell_page(sidebar, self.user_pages)
 
-        layout.addLayout(top_grid)
-        layout.addLayout(bottom)
+    def _build_user_home(self) -> QWidget:
+        page, layout = self._content_page("首页概览", "校园服务集中入口，常用信息一屏查看。")
+        cards = QHBoxLayout()
+        self.user_kpi_labels: dict[str, QLabel] = {}
+        for key, title in [("products", "在售商品"), ("bookings", "我的预约"), ("tickets", "校车票"), ("activities", "已报名活动")]:
+            card = card_frame()
+            c = QVBoxLayout(card)
+            t = QLabel(title)
+            t.setObjectName("kpiTitle")
+            v = QLabel("0")
+            v.setObjectName("kpiValue")
+            c.addWidget(t)
+            c.addWidget(v)
+            cards.addWidget(card)
+            self.user_kpi_labels[key] = v
+        layout.addLayout(cards)
+        main = QHBoxLayout()
+        self.home_products = QTextEdit()
+        self.home_products.setReadOnly(True)
+        self.home_activities = QTextEdit()
+        self.home_activities.setReadOnly(True)
+        main.addWidget(self._text_card("最新二手商品", self.home_products))
+        main.addWidget(self._text_card("近期活动", self.home_activities))
+        layout.addLayout(main, 1)
         return page
+
+    def _text_card(self, title: str, widget: QWidget) -> QFrame:
+        frame = card_frame()
+        layout = QVBoxLayout(frame)
+        label = QLabel(title)
+        label.setObjectName("sectionTitle")
+        layout.addWidget(label)
+        layout.addWidget(widget, 1)
+        return frame
 
     def _build_market_page(self) -> QWidget:
-        page = QWidget()
-        page.setObjectName("contentSurface")
-        layout = QVBoxLayout(page)
-        layout.setSpacing(15)
-
-        toolbar = QFrame()
-        toolbar.setObjectName("card")
-        toolbar.setGraphicsEffect(shadow())
-        toolbar_layout = QHBoxLayout(toolbar)
-        toolbar_layout.setContentsMargins(20, 20, 20, 20)
+        page, layout = self._scroll_grid_page("二手市场", "网格卡片展示商品，支持发布、筛选、留言。")
+        tools = QHBoxLayout()
         self.market_keyword = QLineEdit()
-        self.market_keyword.setPlaceholderText("搜索标题或描述")
-        self.market_keyword.returnPressed.connect(self.refresh_market)
+        self.market_keyword.setPlaceholderText("搜索商品")
         self.market_category = QComboBox()
         self.market_category.addItems(self.model.product_categories())
-        self.market_category.currentIndexChanged.connect(self.refresh_market)
-        publish_button = QPushButton("发布商品")
-        publish_button.clicked.connect(self.open_product_dialog)
-        toolbar_layout.addWidget(self.market_keyword, 2)
-        toolbar_layout.addWidget(self.market_category, 1)
-        toolbar_layout.addWidget(publish_button)
-
-        row = QHBoxLayout()
-        row.addStretch(1)
-        back_button = QPushButton("返回商品列表")
-        back_button.setObjectName("secondaryButton")
-        back_button.clicked.connect(self.back_to_market_grid)
-        row.addWidget(back_button)
-
-        self.market_stack.addWidget(self._build_market_grid_page())
-        self.market_stack.addWidget(self._build_market_detail_page())
-
-        layout.addWidget(toolbar)
-        layout.addLayout(row)
-        layout.addWidget(self.market_stack, 1)
-        return page
-
-    def _build_market_grid_page(self) -> QWidget:
-        page = QWidget()
-        page.setObjectName("contentSurface")
-        layout = QVBoxLayout(page)
-        self.market_scroll = QScrollArea()
-        self.market_scroll.setWidgetResizable(True)
-        self.market_scroll.setFrameShape(QScrollArea.NoFrame)
-        self.market_container = QWidget()
-        self.market_container.setObjectName("contentSurface")
-        self.market_grid = QGridLayout(self.market_container)
-        self.market_grid.setSpacing(15)
-        self.market_scroll.setWidget(self.market_container)
-        layout.addWidget(self.market_scroll)
-        return page
-
-    def _build_market_detail_page(self) -> QWidget:
-        page = QWidget()
-        page.setObjectName("contentSurface")
-        layout = QHBoxLayout(page)
-        layout.setSpacing(15)
-
-        left = QFrame()
-        left.setObjectName("card")
-        left.setGraphicsEffect(shadow())
-        left_layout = QVBoxLayout(left)
-        left_layout.setContentsMargins(20, 20, 20, 20)
-        self.product_image = QLabel()
-        self.product_image.setMinimumHeight(320)
-        self.product_image.setAlignment(Qt.AlignCenter)
-        self.product_title = QLabel("")
-        self.product_title.setObjectName("cardTitle")
-        self.product_meta = QLabel("")
-        self.product_meta.setObjectName("mutedText")
-        self.product_meta.setWordWrap(True)
-        self.product_desc = QTextEdit()
-        self.product_desc.setReadOnly(True)
-        left_layout.addWidget(self.product_image)
-        left_layout.addWidget(self.product_title)
-        left_layout.addWidget(self.product_meta)
-        left_layout.addWidget(self.product_desc, 1)
-
-        right = QFrame()
-        right.setObjectName("card")
-        right.setGraphicsEffect(shadow())
-        right_layout = QVBoxLayout(right)
-        right_layout.setContentsMargins(20, 20, 20, 20)
-        msg_title = QLabel("留言板")
-        msg_title.setObjectName("cardTitle")
-        self.product_messages = QTextEdit()
-        self.product_messages.setReadOnly(True)
-        self.product_message_input = QTextEdit()
-        self.product_message_input.setPlaceholderText("输入留言内容")
-        send_button = QPushButton("发送留言")
-        send_button.clicked.connect(self.send_product_message)
-        right_layout.addWidget(msg_title)
-        right_layout.addWidget(self.product_messages, 2)
-        right_layout.addWidget(self.product_message_input, 1)
-        right_layout.addWidget(send_button)
-
-        layout.addWidget(left, 3)
-        layout.addWidget(right, 2)
+        search = set_secondary(QPushButton("筛选"))
+        search.clicked.connect(self.refresh_market)
+        publish = set_primary(QPushButton("发布商品"))
+        publish.clicked.connect(self.open_product_dialog)
+        tools.addWidget(self.market_keyword, 1)
+        tools.addWidget(self.market_category)
+        tools.addWidget(search)
+        tools.addWidget(publish)
+        layout.addLayout(tools)
+        self.market_grid = QGridLayout()
+        self.market_grid.setSpacing(14)
+        layout.addLayout(self.market_grid)
+        layout.addStretch(1)
         return page
 
     def _build_booking_page(self) -> QWidget:
-        page = QWidget()
-        page.setObjectName("contentSurface")
-        layout = QHBoxLayout(page)
-        layout.setSpacing(15)
-
-        left = QFrame()
-        left.setObjectName("card")
-        left.setGraphicsEffect(shadow())
-        left_layout = QVBoxLayout(left)
-        left_layout.setContentsMargins(20, 20, 20, 20)
-        filter_row = QHBoxLayout()
+        page, layout = self._content_page("场馆预约", "查看未来 7 天场馆时段，支持预约与取消。")
+        tools = QHBoxLayout()
         self.booking_category = QComboBox()
         self.booking_category.addItems(self.model.venue_categories())
-        self.booking_category.currentIndexChanged.connect(self.refresh_bookings)
-        filter_row.addWidget(QLabel("场馆类型"))
-        filter_row.addWidget(self.booking_category)
-        filter_row.addStretch(1)
-        self.slot_table = self._table(["场馆", "类别", "校区", "位置", "日期", "时段", "余位"])
-        self.slot_table.itemSelectionChanged.connect(self.update_slot_detail)
-        book_button = QPushButton("预约当前时段")
-        book_button.clicked.connect(self.create_booking)
-        left_layout.addLayout(filter_row)
-        left_layout.addWidget(self.slot_table, 1)
-        left_layout.addWidget(book_button)
-
-        right = QFrame()
-        right.setObjectName("card")
-        right.setGraphicsEffect(shadow())
-        right_layout = QVBoxLayout(right)
-        right_layout.setContentsMargins(20, 20, 20, 20)
-        self.slot_detail = QTextEdit()
-        self.slot_detail.setReadOnly(True)
-        self.booking_table = self._table(["场馆", "位置", "日期", "时段", "状态"])
+        refresh = set_secondary(QPushButton("刷新"))
+        refresh.clicked.connect(self.refresh_bookings)
+        book = set_primary(QPushButton("点击预约"))
+        book.clicked.connect(self.create_booking)
+        cancel = set_danger(QPushButton("取消我的预约"))
+        cancel.clicked.connect(self.cancel_booking)
+        tools.addWidget(self.booking_category)
+        tools.addWidget(refresh)
+        tools.addStretch(1)
+        tools.addWidget(book)
+        tools.addWidget(cancel)
+        layout.addLayout(tools)
+        self.slot_table = self._table(["场馆", "类别", "校区", "地点", "日期", "时段", "余量"])
+        self.slot_table.itemSelectionChanged.connect(self.capture_slot_selection)
+        self.booking_table = self._table(["场馆", "地点", "日期", "时段", "状态"])
         self.booking_table.itemSelectionChanged.connect(self.capture_booking_selection)
-        cancel_button = QPushButton("取消选中预约")
-        cancel_button.setObjectName("secondaryButton")
-        cancel_button.clicked.connect(self.cancel_booking)
-        right_layout.addWidget(QLabel("时段详情"))
-        right_layout.addWidget(self.slot_detail, 2)
-        right_layout.addWidget(QLabel("我的预约"))
-        right_layout.addWidget(self.booking_table, 2)
-        right_layout.addWidget(cancel_button)
-
-        layout.addWidget(left, 3)
-        layout.addWidget(right, 2)
+        layout.addWidget(QLabel("可预约时段"))
+        layout.addWidget(self.slot_table, 2)
+        layout.addWidget(QLabel("我的预约"))
+        layout.addWidget(self.booking_table, 1)
         return page
 
-    def _build_bus_page(self) -> QWidget:
-        page = QWidget()
-        page.setObjectName("contentSurface")
-        layout = QHBoxLayout(page)
-        layout.setSpacing(15)
-
-        left = QFrame()
-        left.setObjectName("card")
-        left.setGraphicsEffect(shadow())
-        left_layout = QVBoxLayout(left)
-        left_layout.setContentsMargins(20, 20, 20, 20)
-        row = QHBoxLayout()
+    def _build_transit_page(self) -> QWidget:
+        page, layout = self._content_page("校园出行", "查看校车班次与余票，一键预订。")
+        tools = QHBoxLayout()
         self.bus_campus = QComboBox()
-        self.bus_campus.addItems(self.model.shuttle_campuses())
-        self.bus_campus.currentIndexChanged.connect(self.refresh_buses)
-        row.addWidget(QLabel("发车校区"))
-        row.addWidget(self.bus_campus)
-        row.addStretch(1)
-        self.bus_table = self._table(["班次", "起点", "终点", "站点", "发车时间", "实时余座"])
-        ticket_button = QPushButton("预订选中班次")
-        ticket_button.clicked.connect(self.create_ticket)
-        left_layout.addLayout(row)
-        left_layout.addWidget(self.bus_table, 1)
-        left_layout.addWidget(ticket_button)
-
-        right = self._text_card("我的校车票")
-        self.ticket_text = right.findChild(QTextEdit)
-
-        layout.addWidget(left, 3)
-        layout.addWidget(right, 2)
+        self.bus_campus.addItems(["全部", "榆中校区", "城关校区"])
+        refresh = set_secondary(QPushButton("刷新"))
+        refresh.clicked.connect(self.refresh_buses)
+        ticket = set_primary(QPushButton("一键购票"))
+        ticket.clicked.connect(self.create_ticket)
+        tools.addWidget(self.bus_campus)
+        tools.addWidget(refresh)
+        tools.addStretch(1)
+        tools.addWidget(ticket)
+        layout.addLayout(tools)
+        self.bus_table = self._table(["线路", "出发", "到达", "乘车点", "发车时间", "余座"])
+        self.bus_table.itemSelectionChanged.connect(self.capture_route_selection)
+        self.ticket_text = QTextEdit()
+        self.ticket_text.setReadOnly(True)
+        layout.addWidget(self.bus_table, 2)
+        layout.addWidget(self._text_card("我的车票", self.ticket_text), 1)
         return page
 
     def _build_activity_page(self) -> QWidget:
-        page = QWidget()
-        page.setObjectName("contentSurface")
-        layout = QHBoxLayout(page)
-        layout.setSpacing(15)
-
-        left = QFrame()
-        left.setObjectName("card")
-        left.setGraphicsEffect(shadow())
-        left_layout = QVBoxLayout(left)
-        left_layout.setContentsMargins(20, 20, 20, 20)
-        row = QHBoxLayout()
+        page, layout = self._content_page("活动中心", "老师可发布活动，学生可报名，支持名单导出。")
+        tools = QHBoxLayout()
         self.activity_category = QComboBox()
         self.activity_category.addItems(self.model.activity_categories())
-        self.activity_category.currentIndexChanged.connect(self.refresh_activities)
-        publish_button = QPushButton("发布活动")
-        publish_button.clicked.connect(self.open_activity_dialog)
-        row.addWidget(self.activity_category)
-        row.addStretch(1)
-        row.addWidget(publish_button)
-        self.activity_table = self._table(["标题", "分类", "组织者", "时间", "地点", "余位"])
+        refresh = set_secondary(QPushButton("刷新"))
+        refresh.clicked.connect(self.refresh_activities)
+        join = set_primary(QPushButton("报名活动"))
+        join.clicked.connect(self.register_activity)
+        publish = set_secondary(QPushButton("发布活动"))
+        publish.clicked.connect(self.open_activity_dialog)
+        export = set_secondary(QPushButton("导出名单"))
+        export.clicked.connect(self.export_activity)
+        tools.addWidget(self.activity_category)
+        tools.addWidget(refresh)
+        tools.addStretch(1)
+        tools.addWidget(join)
+        tools.addWidget(publish)
+        tools.addWidget(export)
+        layout.addLayout(tools)
+        self.activity_table = self._table(["标题", "分类", "组织者", "时间", "地点", "余位", "状态"])
         self.activity_table.itemSelectionChanged.connect(self.open_activity_detail)
-        left_layout.addLayout(row)
-        left_layout.addWidget(self.activity_table, 1)
-
-        right = QFrame()
-        right.setObjectName("card")
-        right.setGraphicsEffect(shadow())
-        right_layout = QVBoxLayout(right)
-        right_layout.setContentsMargins(20, 20, 20, 20)
         self.activity_detail = QTextEdit()
         self.activity_detail.setReadOnly(True)
-        register_button = QPushButton("报名活动")
-        register_button.clicked.connect(self.register_activity)
-        export_button = QPushButton("导出报名名单")
-        export_button.setObjectName("secondaryButton")
-        export_button.clicked.connect(self.export_activity)
-        right_layout.addWidget(QLabel("活动详情"))
-        right_layout.addWidget(self.activity_detail, 1)
-        right_layout.addWidget(register_button)
-        right_layout.addWidget(export_button)
-
-        layout.addWidget(left, 3)
-        layout.addWidget(right, 2)
+        layout.addWidget(self.activity_table, 2)
+        layout.addWidget(self.activity_detail, 1)
         return page
 
     def _build_moment_page(self) -> QWidget:
-        page = QWidget()
-        page.setObjectName("contentSurface")
-        layout = QVBoxLayout(page)
-        layout.setSpacing(15)
-
-        row = QHBoxLayout()
-        for name in self.model.moment_categories():
-            button = QPushButton(name)
-            button.setObjectName("chipButton")
-            button.clicked.connect(lambda _checked=False, category=name: self.set_moment_filter(category))
-            row.addWidget(button)
-        row.addStretch(1)
-        publish_button = QPushButton("发布动态")
-        publish_button.clicked.connect(self.open_moment_dialog)
-        row.addWidget(publish_button)
-
-        body = QHBoxLayout()
-        body.setSpacing(15)
-
-        left = QFrame()
-        left.setObjectName("card")
-        left.setGraphicsEffect(shadow())
-        left_layout = QVBoxLayout(left)
-        left_layout.setContentsMargins(20, 20, 20, 20)
+        page, layout = self._content_page("生活圈", "校园动态、失物招领、问答和活动信息集中发布。")
+        tools = QHBoxLayout()
+        self.moment_category = QComboBox()
+        self.moment_category.addItems(self.model.moment_categories())
+        refresh = set_secondary(QPushButton("刷新"))
+        refresh.clicked.connect(self.refresh_moments)
+        publish = set_primary(QPushButton("发布动态"))
+        publish.clicked.connect(self.open_moment_dialog)
+        like = set_secondary(QPushButton("点赞/取消"))
+        like.clicked.connect(self.toggle_like)
+        comment = set_secondary(QPushButton("评论"))
+        comment.clicked.connect(self.open_comment_dialog)
+        tools.addWidget(self.moment_category)
+        tools.addWidget(refresh)
+        tools.addStretch(1)
+        tools.addWidget(publish)
+        tools.addWidget(like)
+        tools.addWidget(comment)
+        layout.addLayout(tools)
+        split = QHBoxLayout()
         self.moment_list = QListWidget()
         self.moment_list.setObjectName("momentList")
-        self.moment_list.itemSelectionChanged.connect(self.open_moment_detail)
-        left_layout.addWidget(QLabel("动态流"))
-        left_layout.addWidget(self.moment_list)
-
-        right = QFrame()
-        right.setObjectName("card")
-        right.setGraphicsEffect(shadow())
-        right_layout = QVBoxLayout(right)
-        right_layout.setContentsMargins(20, 20, 20, 20)
+        self.moment_list.currentItemChanged.connect(lambda _cur, _old: self.open_moment_detail())
         self.moment_detail = QTextEdit()
         self.moment_detail.setReadOnly(True)
-        actions = QHBoxLayout()
-        like_button = QPushButton("点赞 / 取消点赞")
-        like_button.clicked.connect(self.toggle_like)
-        comment_button = QPushButton("评论")
-        comment_button.setObjectName("secondaryButton")
-        comment_button.clicked.connect(self.open_comment_dialog)
-        actions.addWidget(like_button)
-        actions.addWidget(comment_button)
-        right_layout.addWidget(QLabel("详情"))
-        right_layout.addWidget(self.moment_detail, 1)
-        right_layout.addLayout(actions)
-
-        body.addWidget(left, 2)
-        body.addWidget(right, 3)
-
-        layout.addLayout(row)
-        layout.addLayout(body, 1)
+        split.addWidget(self.moment_list, 2)
+        split.addWidget(self.moment_detail, 3)
+        layout.addLayout(split, 1)
         return page
 
     def _build_profile_page(self) -> QWidget:
-        page = QWidget()
-        page.setObjectName("contentSurface")
-        layout = QHBoxLayout(page)
-        layout.setSpacing(15)
-        left = self._text_card("个人资料")
-        self.profile_text = left.findChild(QTextEdit)
-
-        right = QFrame()
-        right.setObjectName("card")
-        right.setGraphicsEffect(shadow())
-        form = QFormLayout(right)
-        form.setContentsMargins(20, 20, 20, 20)
+        page, layout = self._content_page("个人中心", "查看个人资料、预约记录和修改密码。")
+        split = QHBoxLayout()
+        self.profile_text = QTextEdit()
+        self.profile_text.setReadOnly(True)
+        form = card_frame()
+        f = QFormLayout(form)
         self.old_password = QLineEdit()
         self.old_password.setEchoMode(QLineEdit.Password)
         self.new_password = QLineEdit()
         self.new_password.setEchoMode(QLineEdit.Password)
         self.confirm_password = QLineEdit()
         self.confirm_password.setEchoMode(QLineEdit.Password)
-        submit_button = QPushButton("修改密码")
-        submit_button.clicked.connect(self.change_password)
-        form.addRow("原密码", self.old_password)
-        form.addRow("新密码", self.new_password)
-        form.addRow("确认密码", self.confirm_password)
-        form.addRow(submit_button)
-
-        layout.addWidget(left, 3)
-        layout.addWidget(right, 2)
+        submit = set_primary(QPushButton("修改密码"))
+        submit.clicked.connect(self.change_password)
+        f.addRow("原密码", self.old_password)
+        f.addRow("新密码", self.new_password)
+        f.addRow("确认密码", self.confirm_password)
+        f.addRow(submit)
+        split.addWidget(self.profile_text, 2)
+        split.addWidget(form, 1)
+        layout.addLayout(split, 1)
         return page
 
-    def _text_card(self, title_text: str) -> QFrame:
-        card = QFrame()
-        card.setObjectName("card")
-        card.setGraphicsEffect(shadow())
-        layout = QVBoxLayout(card)
-        layout.setContentsMargins(20, 20, 20, 20)
-        title = QLabel(title_text)
-        title.setObjectName("cardTitle")
-        text = QTextEdit()
-        text.setReadOnly(True)
-        layout.addWidget(title)
-        layout.addWidget(text)
-        return card
+    def _build_admin_shell(self) -> QWidget:
+        self.admin_pages = QStackedWidget()
+        self.admin_pages.addWidget(self._build_admin_overview())
+        self.admin_pages.addWidget(self._build_admin_users())
+        self.admin_pages.addWidget(self._build_admin_products())
+        self.admin_pages.addWidget(self._build_admin_bookings())
+        self.admin_pages.addWidget(self._build_admin_activities())
+        self.admin_pages.addWidget(self._build_admin_moments())
+        self.admin_pages.addWidget(self._build_admin_logs())
+        sidebar = self._build_sidebar(admin=True)
+        assert self.admin_nav is not None
+        self.admin_nav.currentRowChanged.connect(self.admin_pages.setCurrentIndex)
+        self.admin_nav.setCurrentRow(0)
+        return self._shell_page(sidebar, self.admin_pages)
+
+    def _build_admin_overview(self) -> QWidget:
+        page, layout = self._content_page("数据总览", "系统后台核心指标与场馆预约热度。")
+        cards = QHBoxLayout()
+        self.admin_kpi_labels: dict[str, QLabel] = {}
+        for key, title in [("users", "用户总数"), ("today_bookings", "今日预约"), ("products", "在售商品"), ("moments", "动态数量")]:
+            card = card_frame()
+            c = QVBoxLayout(card)
+            t = QLabel(title)
+            t.setObjectName("kpiTitle")
+            v = QLabel("0")
+            v.setObjectName("kpiValue")
+            c.addWidget(t)
+            c.addWidget(v)
+            cards.addWidget(card)
+            self.admin_kpi_labels[key] = v
+        layout.addLayout(cards)
+        chart_card = card_frame()
+        chart_layout = QVBoxLayout(chart_card)
+        title = QLabel("近一周场馆预约热度")
+        title.setObjectName("sectionTitle")
+        self.admin_chart = BarChart()
+        chart_layout.addWidget(title)
+        chart_layout.addWidget(self.admin_chart)
+        layout.addWidget(chart_card, 1)
+        self.admin_recent_logs = QTextEdit()
+        self.admin_recent_logs.setReadOnly(True)
+        layout.addWidget(self._text_card("最近管理操作", self.admin_recent_logs), 1)
+        return page
+
+    def _build_admin_users(self) -> QWidget:
+        page, layout = self._content_page("用户管理", "查看使用者并执行封禁、解封。")
+        tools = QHBoxLayout()
+        refresh = set_secondary(QPushButton("刷新"))
+        refresh.clicked.connect(self.refresh_admin_users)
+        ban = set_danger(QPushButton("封禁用户"))
+        ban.clicked.connect(lambda: self.admin_change_user("banned"))
+        unban = set_primary(QPushButton("解封用户"))
+        unban.clicked.connect(lambda: self.admin_change_user("active"))
+        tools.addStretch(1)
+        tools.addWidget(refresh)
+        tools.addWidget(ban)
+        tools.addWidget(unban)
+        layout.addLayout(tools)
+        self.admin_user_table = self._table(["账号", "姓名", "身份", "状态", "学院/单位", "创建时间"])
+        self.admin_user_table.itemSelectionChanged.connect(lambda: self.capture_admin_selection("user", self.admin_user_rows, self.admin_user_table))
+        layout.addWidget(self.admin_user_table, 1)
+        return page
+
+    def _build_admin_products(self) -> QWidget:
+        page, layout = self._content_page("商品管理", "下架违规商品或恢复误操作商品。")
+        tools = QHBoxLayout()
+        refresh = set_secondary(QPushButton("刷新"))
+        refresh.clicked.connect(self.refresh_admin_products)
+        detail = set_secondary(QPushButton("查看详情"))
+        detail.clicked.connect(self.admin_show_product_detail)
+        remove = set_danger(QPushButton("下架商品"))
+        remove.clicked.connect(lambda: self.admin_change_product("removed"))
+        restore = set_primary(QPushButton("恢复商品"))
+        restore.clicked.connect(lambda: self.admin_change_product("normal"))
+        tools.addStretch(1)
+        tools.addWidget(refresh)
+        tools.addWidget(detail)
+        tools.addWidget(remove)
+        tools.addWidget(restore)
+        layout.addLayout(tools)
+        self.admin_product_table = self._table(["标题", "分类", "校区", "价格", "发布人", "状态", "发布时间"])
+        self.admin_product_table.itemSelectionChanged.connect(lambda: self.capture_admin_selection("product", self.admin_product_rows, self.admin_product_table))
+        layout.addWidget(self.admin_product_table, 1)
+        return page
+
+    def _build_admin_bookings(self) -> QWidget:
+        page, layout = self._content_page("预约管理", "查看所有预约并执行后台强制取消。")
+        tools = QHBoxLayout()
+        refresh = set_secondary(QPushButton("刷新"))
+        refresh.clicked.connect(self.refresh_admin_bookings)
+        cancel = set_danger(QPushButton("强制取消预约"))
+        cancel.clicked.connect(self.admin_cancel_booking)
+        tools.addStretch(1)
+        tools.addWidget(refresh)
+        tools.addWidget(cancel)
+        layout.addLayout(tools)
+        self.admin_booking_table = self._table(["用户", "账号", "场馆", "地点", "日期", "时段", "状态"])
+        self.admin_booking_table.itemSelectionChanged.connect(lambda: self.capture_admin_selection("booking", self.admin_booking_rows, self.admin_booking_table))
+        layout.addWidget(self.admin_booking_table, 1)
+        return page
+
+    def _build_admin_activities(self) -> QWidget:
+        page, layout = self._content_page("活动管理", "查看活动、取消活动、导出报名名单。")
+        tools = QHBoxLayout()
+        refresh = set_secondary(QPushButton("刷新"))
+        refresh.clicked.connect(self.refresh_admin_activities)
+        detail = set_secondary(QPushButton("查看详情"))
+        detail.clicked.connect(self.admin_show_activity_detail)
+        cancel = set_danger(QPushButton("取消活动"))
+        cancel.clicked.connect(self.admin_cancel_activity)
+        export = set_primary(QPushButton("导出名单"))
+        export.clicked.connect(self.admin_export_activity)
+        tools.addStretch(1)
+        tools.addWidget(refresh)
+        tools.addWidget(detail)
+        tools.addWidget(cancel)
+        tools.addWidget(export)
+        layout.addLayout(tools)
+        self.admin_activity_table = self._table(["标题", "分类", "组织者", "时间", "地点", "报名数", "状态"])
+        self.admin_activity_table.itemSelectionChanged.connect(lambda: self.capture_admin_selection("activity", self.admin_activity_rows, self.admin_activity_table))
+        layout.addWidget(self.admin_activity_table, 1)
+        return page
+
+    def _build_admin_moments(self) -> QWidget:
+        page, layout = self._content_page("生活圈审核", "删除违规动态或恢复误删动态。")
+        tools = QHBoxLayout()
+        refresh = set_secondary(QPushButton("刷新"))
+        refresh.clicked.connect(self.refresh_admin_moments)
+        detail = set_secondary(QPushButton("查看详情"))
+        detail.clicked.connect(self.admin_show_moment_detail)
+        remove = set_danger(QPushButton("删除动态"))
+        remove.clicked.connect(lambda: self.admin_change_moment("removed"))
+        restore = set_primary(QPushButton("恢复动态"))
+        restore.clicked.connect(lambda: self.admin_change_moment("normal"))
+        tools.addStretch(1)
+        tools.addWidget(refresh)
+        tools.addWidget(detail)
+        tools.addWidget(remove)
+        tools.addWidget(restore)
+        layout.addLayout(tools)
+        self.admin_moment_table = self._table(["分类", "发布人", "内容", "点赞", "评论", "状态", "发布时间"])
+        self.admin_moment_table.itemSelectionChanged.connect(lambda: self.capture_admin_selection("moment", self.admin_moment_rows, self.admin_moment_table))
+        layout.addWidget(self.admin_moment_table, 1)
+        return page
+
+    def _build_admin_logs(self) -> QWidget:
+        page, layout = self._content_page("操作日志", "所有后台关键操作均保留记录。")
+        refresh = set_secondary(QPushButton("刷新"))
+        refresh.clicked.connect(self.refresh_admin_logs)
+        layout.addWidget(refresh, 0, Qt.AlignRight)
+        self.admin_log_table = self._table(["管理员", "操作", "对象", "对象ID", "详情", "时间"])
+        layout.addWidget(self.admin_log_table, 1)
+        return page
 
     def _table(self, headers: list[str]) -> QTableWidget:
         table = QTableWidget()
@@ -881,20 +994,33 @@ class MainWindow(QMainWindow):
         table.setHorizontalHeaderLabels(headers)
         table.verticalHeader().setVisible(False)
         table.setSelectionBehavior(QTableWidget.SelectRows)
-        table.setSelectionMode(QTableWidget.SingleSelection)
         table.setEditTriggers(QTableWidget.NoEditTriggers)
-        table.horizontalHeader().setStretchLastSection(True)
+        table.setAlternatingRowColors(True)
+        table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
         return table
 
-    def enter_workspace(self) -> None:
-        user = self.model.require_user()
-        role_map = {"student": "学生", "teacher": "教师", "admin": "管理员"}
-        self.user_badge.setText(f"{user.display_name}\n{role_map.get(user.role, user.role)} | {user.college}")
-        self.root_stack.switch_to(1)
-        self.nav_list.setCurrentRow(0)
-        self.refresh_all()
+    def fill_table(self, table: QTableWidget, rows: list[list[str]], status_column: int | None = None) -> None:
+        table.setRowCount(len(rows))
+        for r, values in enumerate(rows):
+            row_status = values[status_column] if status_column is not None and status_column < len(values) else ""
+            for c, value in enumerate(values):
+                item = QTableWidgetItem(value)
+                if status_column is not None and c == status_column:
+                    if "正常" in value or "成功" in value:
+                        item.setForeground(QColor("#00A896"))
+                    elif "封禁" in value or "下架" in value or "强制" in value or "取消" in value:
+                        item.setForeground(QColor("#E63946" if "封禁" in value or "下架" in value else "#6C757D"))
+                        if "强制" in value:
+                            font = item.font()
+                            font.setItalic(True)
+                            item.setFont(font)
+                if "封禁" in row_status or "下架" in row_status or "删除" in row_status:
+                    item.setBackground(QColor("#F1F3F5"))
+                table.setItem(r, c, item)
+        if rows:
+            table.selectRow(0)
 
-    def refresh_all(self) -> None:
+    def refresh_user_all(self) -> None:
         self.refresh_home()
         self.refresh_market()
         self.refresh_bookings()
@@ -903,122 +1029,52 @@ class MainWindow(QMainWindow):
         self.refresh_moments()
         self.refresh_profile()
 
-    def change_page(self, index: int) -> None:
-        titles = [
-            ("首页", "查看核心数据、最近商品和近期活动。"),
-            ("二手市场", "支持列表到详情页跳转、图片发布、模糊搜索和留言板。"),
-            ("场馆预约", "未来 3 天预约矩阵，状态变更只做局部刷新。"),
-            ("校园出行", "城关与榆中班次预设，动态显示即将发车班次余座。"),
-            ("社团活动", "支持活动发布、报名与名单导出。"),
-            ("翠英生活圈", "顶部标签切换动态流，并支持点赞和评论。"),
-            ("个人中心", "查看个人汇总信息并修改账户密码。"),
-        ]
-        if index < 0 or index >= len(titles):
-            return
-        self.header_title.setText(titles[index][0])
-        self.header_desc.setText(titles[index][1])
-        self.page_stack.switch_to(index)
-        refresh_map = {
-            0: self.refresh_home,
-            1: self.refresh_market,
-            2: self.refresh_bookings,
-            3: self.refresh_buses,
-            4: self.refresh_activities,
-            5: self.refresh_moments,
-            6: self.refresh_profile,
-        }
-        refresh_map[index]()
-
     def refresh_home(self) -> None:
         summary = self.model.dashboard_summary()
-        for key, label in self.stat_labels.items():
-            label.setText(str(summary["stats"][key]))
-        self.home_products_card.findChild(QTextEdit).setPlainText(
-            "\n".join(f"• {row['title']} / {row['category']} / ¥{row['price']:.0f} / {row['seller_name']}" for row in summary["recent_products"])
-        )
-        self.home_activities_card.findChild(QTextEdit).setPlainText(
-            "\n".join(f"• {row['title']} / {row['start_time']} / {row['location']}" for row in summary["recent_activities"])
-        )
+        for key, value in summary["totals"].items():
+            self.user_kpi_labels[key].setText(str(value))
+        self.home_products.setPlainText("\n".join(f"{p['title']} / ¥{p['price']:.0f} / {p['seller_name']}" for p in summary["recent_products"]))
+        self.home_activities.setPlainText("\n".join(f"{a['title']} / {a['start_time']} / {a['location']}" for a in summary["recent_activities"]))
 
-    def clear_market_grid(self) -> None:
-        while self.market_grid.count():
-            item = self.market_grid.takeAt(0)
+    def clear_grid(self, grid: QGridLayout) -> None:
+        while grid.count():
+            item = grid.takeAt(0)
             widget = item.widget()
-            if widget is not None:
+            if widget:
                 widget.deleteLater()
 
     def refresh_market(self) -> None:
-        self.market_rows = self.model.list_products(self.market_keyword.text(), self.market_category.currentText())
-        self.clear_market_grid()
+        self.market_rows = self.model.list_products(self.market_keyword.text().strip(), self.market_category.currentText())
+        self.clear_grid(self.market_grid)
         for index, product in enumerate(self.market_rows):
-            button = QPushButton()
-            button.setObjectName("productCard")
-            button.setMinimumHeight(360)
-            button.setCursor(Qt.PointingHandCursor)
-            button.setGraphicsEffect(shadow())
-            content = QVBoxLayout(button)
-            content.setContentsMargins(0, 0, 0, 0)
-            image = QLabel()
-            image.setPixmap(product_pixmap(product["image_path"], 420, 190))
-            image.setFixedHeight(190)
-            image.setAlignment(Qt.AlignCenter)
-            text_wrap = QWidget()
-            text_wrap.setObjectName("textWrap")
-            text_layout = QVBoxLayout(text_wrap)
-            text_layout.setContentsMargins(20, 18, 20, 20)
+            card = card_frame()
+            card.setMinimumHeight(260)
+            layout = QVBoxLayout(card)
+            img = QLabel()
+            img.setPixmap(product_pixmap(product["image_path"], 260, 120))
+            img.setFixedHeight(120)
+            img.setAlignment(Qt.AlignCenter)
             title = QLabel(product["title"])
             title.setObjectName("cardTitle")
-            meta = QLabel(f"{product['category']} · {product['campus']} · ¥{product['price']:.0f}")
+            price = QLabel(f"¥{product['price']:.2f}")
+            price.setObjectName("priceText")
+            meta = QLabel(f"{product['category']} · {product['campus']} · {product['seller_name']}")
             meta.setObjectName("mutedText")
-            desc = QLabel(product["description"][:92])
-            desc.setObjectName("mutedText")
-            desc.setWordWrap(True)
-            text_layout.addWidget(title)
-            text_layout.addWidget(meta)
-            text_layout.addWidget(desc)
-            text_layout.addStretch(1)
-            content.addWidget(image)
-            content.addWidget(text_wrap)
-            button.clicked.connect(lambda _checked=False, product_id=product["id"]: self.open_product_detail(product_id))
-            self.market_grid.addWidget(button, index // 3, index % 3)
-
-    def open_product_detail(self, product_id: int) -> None:
-        self.market_scroll_value = self.market_scroll.verticalScrollBar().value()
-        detail = self.model.get_product(product_id)
-        if detail is None:
-            self.show_toast("商品不存在", "error")
-            return
-        self.current_product_id = product_id
-        self.product_image.setPixmap(product_pixmap(detail["image_path"], 620, 320))
-        self.product_title.setText(detail["title"])
-        self.product_meta.setText(
-            f"分类：{detail['category']} · 校区：{detail['campus']} · 价格：¥{detail['price']:.2f}\n卖家：{detail['seller_name']} · 单位：{detail['seller_college']}"
-        )
-        self.product_desc.setPlainText(detail["description"])
-        self.product_messages.setPlainText(
-            "\n".join(f"[{row['created_at']}] {row['display_name']}：{row['content']}" for row in detail["messages"]) or "还没有留言，来发第一条。"
-        )
-        self.market_stack.switch_to(1)
-
-    def back_to_market_grid(self) -> None:
-        self.market_stack.switch_to(0)
-        QTimer.singleShot(40, lambda: self.market_scroll.verticalScrollBar().setValue(self.market_scroll_value))
-
-    def send_product_message(self) -> None:
-        if self.current_product_id is None:
-            self.show_toast("请先选择商品", "error")
-            return
-        success, message = self.model.add_product_message(self.current_product_id, self.product_message_input.toPlainText().strip())
-        self.show_toast(message, "success" if success else "error")
-        if success:
-            self.product_message_input.clear()
-            self.open_product_detail(self.current_product_id)
+            btn = set_secondary(QPushButton("留言 / 详情"))
+            btn.clicked.connect(lambda _checked=False, pid=product["id"]: self.open_product_detail(pid))
+            layout.addWidget(img)
+            layout.addWidget(title)
+            layout.addWidget(price)
+            layout.addWidget(meta)
+            layout.addStretch(1)
+            layout.addWidget(btn)
+            self.market_grid.addWidget(card, index // 3, index % 3)
 
     def open_product_dialog(self) -> None:
-        dialog = ProductDialog(self)
+        dialog = ProductDialog(self, self.model)
         if dialog.exec() != QDialog.Accepted:
             return
-        success, message = self.model.create_product(
+        ok, msg = self.model.create_product(
             dialog.title_input.text().strip(),
             dialog.category_input.currentText(),
             dialog.campus_input.currentText(),
@@ -1026,68 +1082,107 @@ class MainWindow(QMainWindow):
             dialog.desc_input.toPlainText().strip(),
             dialog.image_path,
         )
-        self.show_toast(message, "success" if success else "error")
-        if success:
+        self.show_toast(msg, ok)
+        if ok:
             self.refresh_home()
             self.refresh_market()
 
-    def fill_table(self, table: QTableWidget, rows: list[list[str]]) -> None:
-        table.clearContents()
-        table.setRowCount(len(rows))
-        for row_index, values in enumerate(rows):
-            for col_index, value in enumerate(values):
-                table.setItem(row_index, col_index, QTableWidgetItem(value))
-        table.resizeColumnsToContents()
+    def open_product_detail(self, product_id: int) -> None:
+        detail = self.model.get_product(product_id)
+        if detail is None:
+            self.show_toast("商品不存在", False)
+            return
+        dialog = DetailDialog(
+            self,
+            detail["title"],
+            f"{detail['category']} · {detail['campus']} · {detail['seller_name']}",
+            STATUS_LABELS.get(detail["status"], detail["status"]),
+            detail["status"],
+        )
+        image = QLabel()
+        image.setPixmap(product_pixmap(detail["image_path"], 650, 180))
+        image.setFixedHeight(180)
+        image.setAlignment(Qt.AlignCenter)
+        dialog.root.addWidget(image)
+        dialog.add_meta_grid([
+            ("价格", f"¥{detail['price']:.2f}"),
+            ("卖家", detail["seller_name"]),
+            ("校区", detail["campus"]),
+            ("单位", detail["seller_college"]),
+        ])
+        dialog.add_section("商品描述", detail["description"], 80)
+        history = "\n".join(f"[{m['created_at']}] {m['display_name']}: {m['content']}" for m in detail["messages"]) or "暂无留言"
+        dialog.add_section("留言记录", history, 110)
+
+        def leave_message() -> None:
+            message_dialog = CommentDialog(dialog, "商品留言", "给卖家留一句话")
+            if message_dialog.exec() != QDialog.Accepted:
+                return
+            ok, msg = self.model.add_product_message(product_id, message_dialog.content_input.toPlainText().strip())
+            self.show_toast(msg, ok)
+            if ok:
+                dialog.accept()
+
+        dialog.add_actions([
+            ("返回列表", dialog.reject, "secondary"),
+            ("我要留言", leave_message, "primary"),
+        ])
+        if dialog.exec() == QDialog.Accepted:
+            self.refresh_market()
 
     def refresh_bookings(self) -> None:
         self.slot_rows = self.model.list_slots(self.booking_category.currentText())
         self.fill_table(
             self.slot_table,
-            [[row["name"], row["category"], row["campus"], row["location"], row["slot_date"], row["slot_time"], str(row["seats_left"])] for row in self.slot_rows],
+            [[r["name"], r["category"], r["campus"], r["location"], r["slot_date"], r["slot_time"], str(r["seats_left"])] for r in self.slot_rows],
         )
-        if self.slot_rows:
-            self.slot_table.selectRow(0)
         self.booking_rows = self.model.list_my_bookings()
         self.fill_table(
             self.booking_table,
-            [[row["name"], row["location"], row["slot_date"], row["slot_time"], row["status"]] for row in self.booking_rows],
+            [[r["name"], r["location"], r["slot_date"], r["slot_time"], STATUS_LABELS.get(r["status"], r["status"])] for r in self.booking_rows],
+            4,
         )
 
-    def update_slot_detail(self) -> None:
+    def capture_slot_selection(self) -> None:
         row = self.slot_table.currentRow()
-        if row < 0 or row >= len(getattr(self, "slot_rows", [])):
-            return
-        item = self.slot_rows[row]
-        self.slot_detail.setPlainText(
-            f"场馆：{item['name']}\n类别：{item['category']}\n校区：{item['campus']}\n位置：{item['location']}\n日期：{item['slot_date']}\n时段：{item['slot_time']}\n剩余名额：{item['seats_left']}"
-        )
+        self.current_slot_id = self.slot_rows[row]["id"] if 0 <= row < len(getattr(self, "slot_rows", [])) else None
+
+    def capture_booking_selection(self) -> None:
+        row = self.booking_table.currentRow()
+        self.current_booking_id = self.booking_rows[row]["id"] if 0 <= row < len(getattr(self, "booking_rows", [])) else None
 
     def create_booking(self) -> None:
-        row = self.slot_table.currentRow()
-        if row < 0 or row >= len(getattr(self, "slot_rows", [])):
-            self.show_toast("请先选择时段", "error")
+        slot_id = getattr(self, "current_slot_id", None)
+        if slot_id is None:
+            self.show_toast("请先选择时段", False)
             return
-        success, message = self.model.create_booking(self.slot_rows[row]["id"])
-        self.show_toast(message, "success" if success else "error")
-        if success:
+        row = self.slot_table.currentRow()
+        slot = self.slot_rows[row] if 0 <= row < len(getattr(self, "slot_rows", [])) else None
+        if slot is not None:
+            confirm = ConfirmDialog(
+                self,
+                "确认预约",
+                f"场馆：{slot['name']}\n地点：{slot['location']}\n日期：{slot['slot_date']}\n时段：{slot['slot_time']}\n\n确认提交后会占用该时段名额。",
+            )
+            if confirm.exec() != QDialog.Accepted:
+                return
+        ok, msg = self.model.create_booking(slot_id)
+        self.show_toast(msg, ok)
+        if ok:
             self.refresh_home()
             self.refresh_bookings()
             self.refresh_profile()
 
-    def capture_booking_selection(self) -> None:
-        row = self.booking_table.currentRow()
-        if row < 0 or row >= len(getattr(self, "booking_rows", [])):
-            self.current_booking_id = None
-            return
-        self.current_booking_id = self.booking_rows[row]["id"]
-
     def cancel_booking(self) -> None:
         if self.current_booking_id is None:
-            self.show_toast("请先选择预约记录", "error")
+            self.show_toast("请先选择预约记录", False)
             return
-        success, message = self.model.cancel_booking(self.current_booking_id)
-        self.show_toast(message, "success" if success else "error")
-        if success:
+        confirm = ConfirmDialog(self, "取消预约", "确认取消选中的预约记录？取消后该时段名额会释放。", True)
+        if confirm.exec() != QDialog.Accepted:
+            return
+        ok, msg = self.model.cancel_booking(self.current_booking_id)
+        self.show_toast(msg, ok)
+        if ok:
             self.refresh_home()
             self.refresh_bookings()
             self.refresh_profile()
@@ -1096,20 +1191,31 @@ class MainWindow(QMainWindow):
         self.bus_rows = self.model.list_shuttle_routes(self.bus_campus.currentText())
         self.fill_table(
             self.bus_table,
-            [[row["route_name"], row["from_campus"], row["to_campus"], row["station"], row["departure_time"], str(row["seats_left"])] for row in self.bus_rows],
+            [[r["route_name"], r["from_campus"], r["to_campus"], r["station"], r["departure_time"], str(r["seats_left"])] for r in self.bus_rows],
         )
-        self.ticket_text.setPlainText(
-            "\n".join(f"• {row['ride_date']} {row['departure_time']} / {row['route_name']} / {row['station']}" for row in self.model.list_my_tickets()) or "还没有校车票。"
-        )
+        self.ticket_text.setPlainText("\n".join(f"{t['ride_date']} {t['departure_time']} / {t['route_name']} / {t['station']} / {STATUS_LABELS.get(t['status'], t['status'])}" for t in self.model.list_my_tickets()) or "暂无车票")
+
+    def capture_route_selection(self) -> None:
+        row = self.bus_table.currentRow()
+        self.current_route_id = self.bus_rows[row]["id"] if 0 <= row < len(getattr(self, "bus_rows", [])) else None
 
     def create_ticket(self) -> None:
-        row = self.bus_table.currentRow()
-        if row < 0 or row >= len(getattr(self, "bus_rows", [])):
-            self.show_toast("请先选择班次", "error")
+        if self.current_route_id is None:
+            self.show_toast("请先选择班次", False)
             return
-        success, message = self.model.create_shuttle_ticket(self.bus_rows[row]["id"])
-        self.show_toast(message, "success" if success else "error")
-        if success:
+        row = self.bus_table.currentRow()
+        route = self.bus_rows[row] if 0 <= row < len(getattr(self, "bus_rows", [])) else None
+        if route is not None:
+            confirm = ConfirmDialog(
+                self,
+                "确认购票",
+                f"线路：{route['route_name']}\n乘车点：{route['station']}\n发车时间：{route['departure_time']}\n余座：{route['seats_left']}\n\n确认后将生成今日校车票。",
+            )
+            if confirm.exec() != QDialog.Accepted:
+                return
+        ok, msg = self.model.create_shuttle_ticket(self.current_route_id)
+        self.show_toast(msg, ok)
+        if ok:
             self.refresh_buses()
             self.refresh_profile()
 
@@ -1117,57 +1223,81 @@ class MainWindow(QMainWindow):
         self.activity_rows = self.model.list_activities(self.activity_category.currentText())
         self.fill_table(
             self.activity_table,
-            [[row["title"], row["category"], row["organizer_name"], row["start_time"], row["location"], str(row["seats_left"])] for row in self.activity_rows],
+            [[r["title"], r["category"], r["organizer_name"], r["start_time"], r["location"], str(r["seats_left"]), STATUS_LABELS.get(r["status"], r["status"])] for r in self.activity_rows],
+            6,
         )
-        if self.activity_rows:
-            self.activity_table.selectRow(0)
-            self.open_activity_detail()
-        else:
-            self.activity_detail.setPlainText("暂无活动。")
+        self.open_activity_detail()
 
     def open_activity_detail(self) -> None:
         row = self.activity_table.currentRow()
-        if row < 0 or row >= len(getattr(self, "activity_rows", [])):
+        if not (0 <= row < len(getattr(self, "activity_rows", []))):
+            self.current_activity_id = None
+            self.activity_detail.clear()
             return
         self.current_activity_id = self.activity_rows[row]["id"]
         detail = self.model.get_activity(self.current_activity_id)
         if detail is None:
             return
-        members = "\n".join(f"• {member['display_name']} / {member['college']}" for member in detail["members"]) or "暂无报名成员"
-        self.activity_detail.setPlainText(
-            f"标题：{detail['title']}\n分类：{detail['category']}\n组织者：{detail['organizer_name']}\n时间：{detail['start_time']}\n地点：{detail['location']}\n余位：{detail['seats_left']}\n\n{detail['summary']}\n\n报名成员：\n{members}"
+        self.activity_detail.setPlainText(f"{detail['title']}\n\n{detail['summary']}\n\n报名人数：{detail['registered_count']} / {detail['capacity']}，双击或点击报名前可查看完整详情。")
+
+    def show_activity_detail_dialog(self) -> bool:
+        if self.current_activity_id is None:
+            self.show_toast("请先选择活动", False)
+            return False
+        detail = self.model.get_activity(self.current_activity_id)
+        if detail is None:
+            self.show_toast("活动不存在", False)
+            return False
+        dialog = DetailDialog(
+            self,
+            detail["title"],
+            f"{detail['category']} · {detail['organizer_name']}",
+            STATUS_LABELS.get(detail["status"], detail["status"]),
+            detail["status"],
         )
+        dialog.add_meta_grid([
+            ("时间", detail["start_time"]),
+            ("地点", detail["location"]),
+            ("报名", f"{detail['registered_count']} / {detail['capacity']}"),
+            ("剩余", str(detail["seats_left"])),
+        ])
+        dialog.add_section("活动简介", detail["summary"], 100)
+        members = "\n".join(f"{m['display_name']} / {m['college']}" for m in detail["members"]) or "暂无报名成员"
+        dialog.add_section("报名成员", members, 130)
+        accepted = {"value": False}
+
+        def confirm_join() -> None:
+            confirm = ConfirmDialog(dialog, "确认报名", f"确认报名参加「{detail['title']}」？\n系统会记录你的报名信息。")
+            if confirm.exec() != QDialog.Accepted:
+                return
+            accepted["value"] = True
+            dialog.accept()
+
+        dialog.add_actions([
+            ("关闭", dialog.reject, "secondary"),
+            ("报名活动", confirm_join, "primary"),
+        ])
+        dialog.exec()
+        return accepted["value"]
 
     def register_activity(self) -> None:
         if self.current_activity_id is None:
-            self.show_toast("请先选择活动", "error")
+            self.show_toast("请先选择活动", False)
             return
-        success, message = self.model.register_activity(self.current_activity_id)
-        self.show_toast(message, "success" if success else "error")
-        if success:
+        if not self.show_activity_detail_dialog():
+            return
+        ok, msg = self.model.register_activity(self.current_activity_id)
+        self.show_toast(msg, ok)
+        if ok:
             self.refresh_home()
             self.refresh_activities()
             self.refresh_profile()
 
-    def export_activity(self) -> None:
-        if self.current_activity_id is None:
-            self.show_toast("请先选择活动", "error")
-            return
-        csv_text = self.model.export_activity_csv(self.current_activity_id)
-        if not csv_text:
-            self.show_toast("导出失败", "error")
-            return
-        target_path, _ = QFileDialog.getSaveFileName(self, "保存报名名单", str(APP_ROOT / "activity_registrations.csv"), "CSV Files (*.csv)")
-        if not target_path:
-            return
-        Path(target_path).write_text(csv_text, encoding="utf-8-sig")
-        self.show_toast("名单已导出", "success")
-
     def open_activity_dialog(self) -> None:
-        dialog = ActivityDialog(self)
+        dialog = ActivityDialog(self, self.model)
         if dialog.exec() != QDialog.Accepted:
             return
-        success, message = self.model.create_activity(
+        ok, msg = self.model.create_activity(
             dialog.title_input.text().strip(),
             dialog.category_input.currentText(),
             dialog.location_input.text().strip(),
@@ -1175,27 +1305,33 @@ class MainWindow(QMainWindow):
             dialog.capacity_input.text().strip(),
             dialog.summary_input.toPlainText().strip(),
         )
-        self.show_toast(message, "success" if success else "error")
-        if success:
+        self.show_toast(msg, ok)
+        if ok:
             self.refresh_home()
             self.refresh_activities()
 
-    def set_moment_filter(self, category: str) -> None:
-        self.current_moment_filter = category
-        self.refresh_moments()
+    def export_activity(self) -> None:
+        if self.current_activity_id is None:
+            self.show_toast("请先选择活动", False)
+            return
+        confirm = ConfirmDialog(self, "导出报名名单", "将当前活动报名名单导出到 data/exports 目录，确认继续？")
+        if confirm.exec() != QDialog.Accepted:
+            return
+        target = self.model.export_activity_csv(self.current_activity_id)
+        self.show_toast(f"名单已导出：{target}" if target else "导出失败", bool(target))
 
     def refresh_moments(self) -> None:
-        self.moment_rows = self.model.list_moments(self.current_moment_filter)
+        self.moment_rows = self.model.list_moments(self.moment_category.currentText())
         self.moment_list.clear()
         for row in self.moment_rows:
-            item = QListWidgetItem(f"[{row['category']}] {row['display_name']}  {row['created_at']}\n♥ {row['like_count']}   💬 {row['comment_count']}\n{row['content'][:88]}")
+            item = QListWidgetItem(f"[{row['category']}] {row['display_name']}  {row['created_at']}\n♥ {row['like_count']}   评论 {row['comment_count']}\n{row['content'][:70]}")
             item.setData(Qt.UserRole, row["id"])
             self.moment_list.addItem(item)
         if self.moment_rows:
             self.moment_list.setCurrentRow(0)
-            self.open_moment_detail()
         else:
-            self.moment_detail.setPlainText("暂无动态。")
+            self.current_moment_id = None
+            self.moment_detail.clear()
 
     def open_moment_detail(self) -> None:
         current = self.moment_list.currentItem()
@@ -1205,114 +1341,385 @@ class MainWindow(QMainWindow):
         detail = self.model.get_moment(self.current_moment_id)
         if detail is None:
             return
-        comments = "\n".join(f"[{row['created_at']}] {row['display_name']}：{row['content']}" for row in detail["comments"]) or "暂无评论"
-        image_line = f"\n图片：{detail['image_path']}" if detail["image_path"] else ""
+        comments = "\n".join(f"[{c['created_at']}] {c['display_name']}: {c['content']}" for c in detail["comments"]) or "暂无评论"
         self.moment_detail.setPlainText(
-            f"作者：{detail['display_name']}\n分类：{detail['category']}\n时间：{detail['created_at']}\n点赞：{detail['like_count']}  评论：{detail['comment_count']}{image_line}\n\n{detail['content']}\n\n评论区：\n{comments}"
+            f"作者：{detail['display_name']}\n分类：{detail['category']}\n时间：{detail['created_at']}\n点赞：{detail['like_count']}  评论：{detail['comment_count']}\n状态：{STATUS_LABELS.get(detail['status'], detail['status'])}\n\n{detail['content']}\n\n评论区：\n{comments}"
         )
 
+    def show_moment_detail_dialog(self) -> bool:
+        if self.current_moment_id is None:
+            self.show_toast("请先选择动态", False)
+            return False
+        detail = self.model.get_moment(self.current_moment_id)
+        if detail is None:
+            self.show_toast("动态不存在", False)
+            return False
+        dialog = DetailDialog(
+            self,
+            detail["category"],
+            f"{detail['display_name']} · {detail['created_at']}",
+            STATUS_LABELS.get(detail["status"], detail["status"]),
+            detail["status"],
+        )
+        dialog.add_meta_grid([
+            ("点赞", str(detail["like_count"])),
+            ("评论", str(detail["comment_count"])),
+            ("作者", detail["display_name"]),
+            ("时间", detail["created_at"]),
+        ])
+        dialog.add_section("动态内容", detail["content"], 120)
+        comments = "\n".join(f"[{c['created_at']}] {c['display_name']}: {c['content']}" for c in detail["comments"]) or "暂无评论"
+        dialog.add_section("评论区", comments, 150)
+        comment_requested = {"value": False}
+
+        def add_comment() -> None:
+            comment_requested["value"] = True
+            dialog.accept()
+
+        dialog.add_actions([
+            ("关闭", dialog.reject, "secondary"),
+            ("去评论", add_comment, "primary"),
+        ])
+        dialog.exec()
+        return comment_requested["value"]
+
     def open_moment_dialog(self) -> None:
-        dialog = MomentDialog(self)
+        dialog = MomentDialog(self, self.model)
         if dialog.exec() != QDialog.Accepted:
             return
-        success, message = self.model.create_moment(dialog.category_input.currentText(), dialog.content_input.toPlainText().strip(), dialog.image_path)
-        self.show_toast(message, "success" if success else "error")
-        if success:
+        ok, msg = self.model.create_moment(dialog.category_input.currentText(), dialog.content_input.toPlainText().strip(), dialog.image_path)
+        self.show_toast(msg, ok)
+        if ok:
             self.refresh_home()
             self.refresh_moments()
             self.refresh_profile()
 
     def toggle_like(self) -> None:
         if self.current_moment_id is None:
-            self.show_toast("请先选择动态", "error")
+            self.show_toast("请先选择动态", False)
             return
-        success, message = self.model.toggle_like(self.current_moment_id)
-        self.show_toast(message, "success" if success else "error")
-        if success:
+        ok, msg = self.model.toggle_like(self.current_moment_id)
+        self.show_toast(msg, ok)
+        if ok:
             self.refresh_moments()
-            self.open_moment_detail()
 
     def open_comment_dialog(self) -> None:
         if self.current_moment_id is None:
-            self.show_toast("请先选择动态", "error")
+            self.show_toast("请先选择动态", False)
             return
-        dialog = CommentDialog(self)
+        if not self.show_moment_detail_dialog():
+            return
+        dialog = CommentDialog(self, "发表评论", "补充你的评论")
         if dialog.exec() != QDialog.Accepted:
             return
-        success, message = self.model.add_comment(self.current_moment_id, dialog.content_input.toPlainText().strip())
-        self.show_toast(message, "success" if success else "error")
-        if success:
+        ok, msg = self.model.add_comment(self.current_moment_id, dialog.content_input.toPlainText().strip())
+        self.show_toast(msg, ok)
+        if ok:
             self.refresh_moments()
-            self.open_moment_detail()
 
     def refresh_profile(self) -> None:
         data = self.model.profile_data()
         user = data["user"]
-        bookings = "\n".join(f"• {row['name']} / {row['slot_date']} / {row['slot_time']} / {row['status']}" for row in data["bookings"]) or "• 暂无预约"
-        tickets = "\n".join(f"• {row['ride_date']} / {row['route_name']} / {row['departure_time']}" for row in data["tickets"]) or "• 暂无车票"
+        bookings = "\n".join(f"{b['name']} / {b['slot_date']} / {b['slot_time']} / {STATUS_LABELS.get(b['status'], b['status'])}" for b in data["bookings"]) or "暂无预约"
+        tickets = "\n".join(f"{t['ride_date']} / {t['route_name']} / {t['departure_time']}" for t in data["tickets"]) or "暂无车票"
         self.profile_text.setPlainText(
-            f"姓名：{user['display_name']}\n账号：{user['username']}\n身份：{user['role']}\n学院 / 单位：{user['college']}\n简介：{user['bio']}\n\n我发布的商品：{data['product_count']}\n我发布的动态：{data['moment_count']}\n\n预约记录：\n{bookings}\n\n车票记录：\n{tickets}"
+            f"姓名：{user['display_name']}\n账号：{user['username']}\n身份：{ROLE_LABELS.get(user['role'], user['role'])}\n状态：{STATUS_LABELS.get(user['status'], user['status'])}\n学院/单位：{user['college']}\n注册时间：{user['created_at']}\n\n在售商品：{data['product_count']}\n生活圈动态：{data['moment_count']}\n\n预约记录：\n{bookings}\n\n车票记录：\n{tickets}"
         )
 
     def change_password(self) -> None:
         if self.new_password.text() != self.confirm_password.text():
-            self.show_toast("两次新密码不一致", "error")
+            self.show_toast("两次新密码不一致", False)
             return
-        success, message = self.model.update_password(self.old_password.text(), self.new_password.text())
-        self.show_toast(message, "success" if success else "error")
-        if success:
+        ok, msg = self.model.update_password(self.old_password.text(), self.new_password.text())
+        self.show_toast(msg, ok)
+        if ok:
             self.old_password.clear()
             self.new_password.clear()
             self.confirm_password.clear()
 
-    def apply_theme(self) -> None:
-        qss_path = RESOURCE_ROOT / "desktop" / "style.qss"
-        if not qss_path.exists():
+    def refresh_admin_all(self) -> None:
+        self.refresh_admin_overview()
+        self.refresh_admin_users()
+        self.refresh_admin_products()
+        self.refresh_admin_bookings()
+        self.refresh_admin_activities()
+        self.refresh_admin_moments()
+        self.refresh_admin_logs()
+
+    def refresh_admin_overview(self) -> None:
+        summary = self.model.admin_summary()
+        for key, value in summary["totals"].items():
+            self.admin_kpi_labels[key].setText(str(value))
+        self.admin_chart.set_data(summary["venue_hot"])
+        self.admin_recent_logs.setPlainText("\n".join(f"[{l['created_at']}] {l['admin_name']} {l['action']} - {l['detail']}" for l in summary["recent_logs"]) or "暂无操作日志")
+
+    def capture_admin_selection(self, key: str, rows: list[dict], table: QTableWidget) -> None:
+        row = table.currentRow()
+        self.current_admin_ids[key] = rows[row]["id"] if 0 <= row < len(rows) else None
+
+    def refresh_admin_users(self) -> None:
+        self.admin_user_rows = self.model.admin_users()
+        self.fill_table(
+            self.admin_user_table,
+            [[r["username"], r["display_name"], ROLE_LABELS.get(r["role"], r["role"]), STATUS_LABELS.get(r["status"], r["status"]), r["college"], r["created_at"]] for r in self.admin_user_rows],
+            3,
+        )
+
+    def admin_change_user(self, status: str) -> None:
+        user_id = self.current_admin_ids.get("user")
+        if user_id is None:
+            self.show_toast("请先选择用户", False)
             return
-        style = qss_path.read_text(encoding="utf-8")
-        palettes = {
-            "light": {
-                "{{BG}}": "#F5F5F7",
-                "{{CARD}}": "#FFFFFF",
-                "{{SIDEBAR}}": "#101828",
-                "{{TEXT}}": "#1D1D1F",
-                "{{MUTED}}": "#86868B",
-                "{{BORDER}}": "#E5E5EA",
-                "{{ACCENT}}": "#0A84FF",
-                "{{ACCENT_ALT}}": "#0A84FF",
-                "{{ACCENT_ALT_HOVER}}": "#0077ED",
-                "{{SOFT}}": "#F2F2F7",
-                "{{SOFT_HOVER}}": "#EAEAEE",
-                "{{CARD_HOVER}}": "#FAFAFC",
-            },
-            "dark": {
-                "{{BG}}": "#0F1115",
-                "{{CARD}}": "#171A21",
-                "{{SIDEBAR}}": "#0B0D11",
-                "{{TEXT}}": "#F5F5F7",
-                "{{MUTED}}": "#A1A1A6",
-                "{{BORDER}}": "#262A33",
-                "{{ACCENT}}": "#0A84FF",
-                "{{ACCENT_ALT}}": "#0A84FF",
-                "{{ACCENT_ALT_HOVER}}": "#409CFF",
-                "{{SOFT}}": "#1F232C",
-                "{{SOFT_HOVER}}": "#2A2F38",
-                "{{CARD_HOVER}}": "#1B1F27",
-            },
-        }
-        for key, value in palettes[self.current_theme].items():
-            style = style.replace(key, value)
-        self.setStyleSheet(style)
+        row = next((item for item in self.admin_user_rows if item["id"] == user_id), None)
+        action = "解封用户" if status == "active" else "封禁用户"
+        reason = ""
+        if row is not None:
+            dialog = ReasonDialog(
+                self,
+                action,
+                f"账号：{row['username']}\n姓名：{row['display_name']}\n身份：{ROLE_LABELS.get(row['role'], row['role'])}\n当前状态：{STATUS_LABELS.get(row['status'], row['status'])}",
+                "填写处理依据，例如违规发布、误封恢复等",
+            )
+            if dialog.exec() != QDialog.Accepted:
+                return
+            reason = dialog.reason()
+        ok, msg = self.model.admin_set_user_status(user_id, status, reason)
+        self.show_toast(msg, ok)
+        if ok:
+            self.refresh_admin_users()
+            self.refresh_admin_overview()
+            self.refresh_admin_logs()
 
-    def toggle_theme(self) -> None:
-        self.current_theme = "dark" if self.current_theme == "light" else "light"
-        self.apply_theme()
+    def refresh_admin_products(self) -> None:
+        self.admin_product_rows = self.model.admin_products()
+        self.fill_table(
+            self.admin_product_table,
+            [[r["title"], r["category"], r["campus"], f"¥{r['price']:.2f}", r["seller_name"], STATUS_LABELS.get(r["status"], r["status"]), r["created_at"]] for r in self.admin_product_rows],
+            5,
+        )
 
-    def logout(self) -> None:
-        self.model.logout()
-        self.root_stack.switch_to(0)
+    def admin_change_product(self, status: str) -> None:
+        product_id = self.current_admin_ids.get("product")
+        if product_id is None:
+            self.show_toast("请先选择商品", False)
+            return
+        row = next((item for item in self.admin_product_rows if item["id"] == product_id), None)
+        action = "恢复商品" if status == "normal" else "下架商品"
+        reason = ""
+        if row is not None:
+            dialog = ReasonDialog(
+                self,
+                action,
+                f"商品：{row['title']}\n分类：{row['category']}\n发布人：{row['seller_name']}\n当前状态：{STATUS_LABELS.get(row['status'], row['status'])}",
+                "填写处理原因，例如信息违规、交易完成、误操作恢复等",
+            )
+            if dialog.exec() != QDialog.Accepted:
+                return
+            reason = dialog.reason()
+        ok, msg = self.model.admin_set_product_status(product_id, status, reason)
+        self.show_toast(msg, ok)
+        if ok:
+            self.refresh_admin_products()
+            self.refresh_admin_overview()
+            self.refresh_admin_logs()
 
-    def show_toast(self, message: str, tone: str = "success") -> None:
-        toast = Toast(self, message, tone)
-        toast.show()
+    def admin_show_product_detail(self) -> None:
+        product_id = self.current_admin_ids.get("product")
+        if product_id is None:
+            self.show_toast("请先选择商品", False)
+            return
+        detail = self.model.get_product(product_id)
+        if detail is None:
+            self.show_toast("商品不存在", False)
+            return
+        dialog = DetailDialog(
+            self,
+            detail["title"],
+            f"{detail['category']} · {detail['campus']} · {detail['seller_name']}",
+            STATUS_LABELS.get(detail["status"], detail["status"]),
+            detail["status"],
+        )
+        dialog.add_meta_grid([
+            ("价格", f"¥{detail['price']:.2f}"),
+            ("发布人", detail["seller_name"]),
+            ("校区", detail["campus"]),
+            ("发布时间", detail["created_at"]),
+        ])
+        dialog.add_section("商品描述", detail["description"], 100)
+        messages = "\n".join(f"[{m['created_at']}] {m['display_name']}: {m['content']}" for m in detail["messages"]) or "暂无留言"
+        dialog.add_section("留言记录", messages, 130)
+        dialog.add_actions([("关闭", dialog.reject, "secondary")])
+        dialog.exec()
 
+    def refresh_admin_bookings(self) -> None:
+        self.admin_booking_rows = self.model.admin_bookings()
+        self.fill_table(
+            self.admin_booking_table,
+            [[r["display_name"], r["username"], r["name"], r["location"], r["slot_date"], r["slot_time"], STATUS_LABELS.get(r["status"], r["status"])] for r in self.admin_booking_rows],
+            6,
+        )
+
+    def admin_cancel_booking(self) -> None:
+        booking_id = self.current_admin_ids.get("booking")
+        if booking_id is None:
+            self.show_toast("请先选择预约", False)
+            return
+        row = next((item for item in self.admin_booking_rows if item["id"] == booking_id), None)
+        reason = ""
+        if row is not None:
+            dialog = ReasonDialog(
+                self,
+                "强制取消预约",
+                f"用户：{row['display_name']}（{row['username']}）\n场馆：{row['name']}\n日期：{row['slot_date']} {row['slot_time']}\n当前状态：{STATUS_LABELS.get(row['status'], row['status'])}",
+                "填写后台取消原因，例如场馆维护、异常占用、重复预约等",
+            )
+            if dialog.exec() != QDialog.Accepted:
+                return
+            reason = dialog.reason()
+        ok, msg = self.model.admin_cancel_booking(booking_id, reason)
+        self.show_toast(msg, ok)
+        if ok:
+            self.refresh_admin_bookings()
+            self.refresh_admin_overview()
+            self.refresh_admin_logs()
+
+    def refresh_admin_activities(self) -> None:
+        self.admin_activity_rows = self.model.admin_activities()
+        self.fill_table(
+            self.admin_activity_table,
+            [[r["title"], r["category"], r["organizer_name"], r["start_time"], r["location"], str(r["registered_count"]), STATUS_LABELS.get(r["status"], r["status"])] for r in self.admin_activity_rows],
+            6,
+        )
+
+    def admin_cancel_activity(self) -> None:
+        activity_id = self.current_admin_ids.get("activity")
+        if activity_id is None:
+            self.show_toast("请先选择活动", False)
+            return
+        row = next((item for item in self.admin_activity_rows if item["id"] == activity_id), None)
+        reason = ""
+        if row is not None:
+            dialog = ReasonDialog(
+                self,
+                "取消活动",
+                f"活动：{row['title']}\n组织者：{row['organizer_name']}\n时间：{row['start_time']}\n报名数：{row['registered_count']}\n当前状态：{STATUS_LABELS.get(row['status'], row['status'])}",
+                "填写取消原因，例如时间调整、人数不足、场地冲突等",
+            )
+            if dialog.exec() != QDialog.Accepted:
+                return
+            reason = dialog.reason()
+        ok, msg = self.model.admin_cancel_activity(activity_id, reason)
+        self.show_toast(msg, ok)
+        if ok:
+            self.refresh_admin_activities()
+            self.refresh_admin_overview()
+            self.refresh_admin_logs()
+
+    def admin_show_activity_detail(self) -> None:
+        activity_id = self.current_admin_ids.get("activity")
+        if activity_id is None:
+            self.show_toast("请先选择活动", False)
+            return
+        detail = self.model.get_activity(activity_id)
+        if detail is None:
+            self.show_toast("活动不存在", False)
+            return
+        dialog = DetailDialog(
+            self,
+            detail["title"],
+            f"{detail['category']} · {detail['organizer_name']}",
+            STATUS_LABELS.get(detail["status"], detail["status"]),
+            detail["status"],
+        )
+        dialog.add_meta_grid([
+            ("时间", detail["start_time"]),
+            ("地点", detail["location"]),
+            ("容量", str(detail["capacity"])),
+            ("报名", str(detail["registered_count"])),
+        ])
+        dialog.add_section("活动简介", detail["summary"], 100)
+        members = "\n".join(f"{m['display_name']} / {m['college']}" for m in detail["members"]) or "暂无报名成员"
+        dialog.add_section("报名成员", members, 150)
+        dialog.add_actions([("关闭", dialog.reject, "secondary")])
+        dialog.exec()
+
+    def admin_export_activity(self) -> None:
+        activity_id = self.current_admin_ids.get("activity")
+        if activity_id is None:
+            self.show_toast("请先选择活动", False)
+            return
+        row = next((item for item in self.admin_activity_rows if item["id"] == activity_id), None)
+        title = row["title"] if row else "当前活动"
+        confirm = ConfirmDialog(self, "导出报名名单", f"确认导出「{title}」的报名名单？\n文件会保存到 data/exports 目录。")
+        if confirm.exec() != QDialog.Accepted:
+            return
+        target = self.model.export_activity_csv(activity_id)
+        self.show_toast(f"名单已导出：{target}" if target else "导出失败", bool(target))
+
+    def refresh_admin_moments(self) -> None:
+        self.admin_moment_rows = self.model.admin_moments()
+        self.fill_table(
+            self.admin_moment_table,
+            [[r["category"], r["display_name"], r["content"][:38], str(r["like_count"]), str(r["comment_count"]), STATUS_LABELS.get(r["status"], r["status"]), r["created_at"]] for r in self.admin_moment_rows],
+            5,
+        )
+
+    def admin_change_moment(self, status: str) -> None:
+        moment_id = self.current_admin_ids.get("moment")
+        if moment_id is None:
+            self.show_toast("请先选择动态", False)
+            return
+        row = next((item for item in self.admin_moment_rows if item["id"] == moment_id), None)
+        action = "恢复动态" if status == "normal" else "删除动态"
+        reason = ""
+        if row is not None:
+            dialog = ReasonDialog(
+                self,
+                action,
+                f"分类：{row['category']}\n发布人：{row['display_name']}\n内容：{row['content'][:120]}\n当前状态：{STATUS_LABELS.get(row['status'], row['status'])}",
+                "填写审核原因，例如广告、敏感内容、误删恢复等",
+            )
+            if dialog.exec() != QDialog.Accepted:
+                return
+            reason = dialog.reason()
+        ok, msg = self.model.admin_set_moment_status(moment_id, status, reason)
+        self.show_toast(msg, ok)
+        if ok:
+            self.refresh_admin_moments()
+            self.refresh_admin_overview()
+            self.refresh_admin_logs()
+
+    def admin_show_moment_detail(self) -> None:
+        moment_id = self.current_admin_ids.get("moment")
+        if moment_id is None:
+            self.show_toast("请先选择动态", False)
+            return
+        detail = self.model.get_moment(moment_id)
+        if detail is None:
+            self.show_toast("动态不存在", False)
+            return
+        dialog = DetailDialog(
+            self,
+            detail["category"],
+            f"{detail['display_name']} · {detail['created_at']}",
+            STATUS_LABELS.get(detail["status"], detail["status"]),
+            detail["status"],
+        )
+        dialog.add_meta_grid([
+            ("发布人", detail["display_name"]),
+            ("点赞", str(detail["like_count"])),
+            ("评论", str(detail["comment_count"])),
+            ("发布时间", detail["created_at"]),
+        ])
+        dialog.add_section("动态内容", detail["content"], 120)
+        comments = "\n".join(f"[{c['created_at']}] {c['display_name']}: {c['content']}" for c in detail["comments"]) or "暂无评论"
+        dialog.add_section("评论区", comments, 150)
+        dialog.add_actions([("关闭", dialog.reject, "secondary")])
+        dialog.exec()
+
+    def refresh_admin_logs(self) -> None:
+        rows = self.model.admin_logs()
+        self.fill_table(
+            self.admin_log_table,
+            [[r["admin_name"], r["action"], r["target_type"], str(r["target_id"]), r["detail"], r["created_at"]] for r in rows],
+        )

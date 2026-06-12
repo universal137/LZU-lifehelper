@@ -8,43 +8,65 @@
   </head>
   <body>
     <div class="app-shell">
-      <header class="hero">
-        <div>
-          <p class="eyebrow">LZU LIFE ASSISTANT</p>
-          <h1>兰大生活助手</h1>
-          <p class="hero-text">一站式校园生活服务 MVP，覆盖交易、预约、出行、活动与生活圈。</p>
+      <header class="top-bar">
+        <div class="brand">
+          <span class="brand-mark" aria-hidden="true">兰</span>
+          <div>
+            <strong>兰大生活助手</strong>
+            <span>LZU Life Assistant</span>
+          </div>
         </div>
-        <div class="hero-card" id="dashboardCards"></div>
+        <div class="top-actions">
+          <span id="clockText" class="clock-text"></span>
+          <button id="themeToggle" class="icon-button" type="button" aria-label="切换深浅模式" title="切换深浅模式">◐</button>
+        </div>
       </header>
+
+      <section class="hero" aria-labelledby="appTitle">
+        <div class="hero-copy">
+          <p class="eyebrow">CAMPUS SERVICE HUB</p>
+          <h1 id="appTitle">把校园日常收进一个入口</h1>
+          <p class="hero-text">交易、预约、出行、活动和生活圈统一在同一个工作台中处理，信息更清楚，操作更接近原生应用。</p>
+          <div id="insightStrip" class="insight-strip" aria-live="polite"></div>
+        </div>
+        <div class="hero-card" id="dashboardCards" aria-live="polite"></div>
+      </section>
 
       <main class="content">
         <section class="panel is-active" data-panel="marketplace">
           <div class="section-head">
             <div>
+              <p class="section-kicker">Marketplace</p>
               <h2>二手市场</h2>
-              <p>发布闲置、分类搜索与商品留言。</p>
+              <p>发布闲置、分类搜索、价格排序和商品留言。</p>
             </div>
             <form id="marketSearchForm" class="inline-form">
-              <input name="keyword" type="search" placeholder="搜索商品或描述" />
-              <select name="category">
+              <input name="keyword" type="search" placeholder="搜索商品或描述" autocomplete="off" />
+              <select name="category" aria-label="商品分类">
                 <option>全部</option>
                 <option>书籍</option>
                 <option>数码</option>
                 <option>日用</option>
               </select>
+              <select name="sort" aria-label="排序方式">
+                <option value="latest">最新发布</option>
+                <option value="priceAsc">价格从低到高</option>
+                <option value="priceDesc">价格从高到低</option>
+              </select>
               <button type="submit">筛选</button>
+              <button id="marketClearButton" class="secondary-button" type="button">重置</button>
             </form>
           </div>
 
-          <form id="marketCreateForm" class="grid-form">
+          <form id="marketCreateForm" class="composer-form">
             <input name="title" placeholder="商品标题" required />
-            <select name="category" required>
+            <select name="category" required aria-label="发布分类">
               <option value="">选择分类</option>
               <option>书籍</option>
               <option>数码</option>
               <option>日用</option>
             </select>
-            <input name="price" type="number" min="0" placeholder="价格" required />
+            <input name="price" type="number" min="0" step="1" placeholder="价格" required />
             <input name="sellerName" placeholder="卖家昵称" />
             <input name="imageUrl" placeholder="图片链接（可选）" />
             <input name="description" placeholder="商品描述" required />
@@ -57,8 +79,9 @@
         <section class="panel" data-panel="booking">
           <div class="section-head">
             <div>
+              <p class="section-kicker">Booking</p>
               <h2>场馆预约</h2>
-              <p>展示未来 3 天可预约时段，并支持取消预约。</p>
+              <p>查看未来 3 天可预约时段，并支持取消预约。</p>
             </div>
           </div>
           <div id="bookingSummary" class="summary-row"></div>
@@ -68,8 +91,9 @@
         <section class="panel" data-panel="transit">
           <div class="section-head">
             <div>
+              <p class="section-kicker">Transit</p>
               <h2>便捷出行</h2>
-              <p>校车时刻、余票预订与共享单车站点。</p>
+              <p>校车时刻、余票预订和共享单车站点状态。</p>
             </div>
           </div>
           <div id="transitList" class="split-grid"></div>
@@ -78,11 +102,12 @@
         <section class="panel" data-panel="activities">
           <div class="section-head">
             <div>
+              <p class="section-kicker">Activities</p>
               <h2>社团活动</h2>
               <p>活动发布、报名与名单导出。</p>
             </div>
           </div>
-          <form id="activityForm" class="grid-form">
+          <form id="activityForm" class="composer-form">
             <input name="title" placeholder="活动名称" required />
             <input name="organizer" placeholder="主办社团" required />
             <input name="location" placeholder="活动地点" required />
@@ -96,11 +121,12 @@
         <section class="panel" data-panel="moments">
           <div class="section-head">
             <div>
+              <p class="section-kicker">Moments</p>
               <h2>翠英生活圈</h2>
               <p>发布动态，支持失物招领与问答标签。</p>
             </div>
-            <form id="momentFilterForm" class="inline-form">
-              <select name="tag">
+            <form id="momentFilterForm" class="inline-form compact">
+              <select name="tag" aria-label="动态标签">
                 <option>全部</option>
                 <option>校园动态</option>
                 <option>失物招领</option>
@@ -109,15 +135,15 @@
               <button type="submit">筛选</button>
             </form>
           </div>
-          <form id="momentForm" class="grid-form">
+          <form id="momentForm" class="composer-form compact-composer">
             <input name="author" placeholder="发布者昵称" />
-            <select name="tag" required>
+            <select name="tag" required aria-label="动态标签">
               <option value="">选择标签</option>
               <option>校园动态</option>
               <option>失物招领</option>
               <option>互助问答</option>
             </select>
-            <input name="content" placeholder="说点什么…" required />
+            <input name="content" placeholder="说点什么..." required />
             <button type="submit">发布动态</button>
           </form>
           <div id="momentList" class="stack-list"></div>
@@ -126,25 +152,38 @@
         <section class="panel" data-panel="profile">
           <div class="section-head">
             <div>
+              <p class="section-kicker">Profile</p>
               <h2>我的</h2>
-              <p>汇总当前用户的预约、活动和行程状态。</p>
+              <p>汇总当前用户的预约、活动、行程和发布状态。</p>
             </div>
           </div>
           <div id="profileView" class="profile-card"></div>
         </section>
       </main>
 
-      <nav class="bottom-nav">
-        <button class="nav-item is-active" data-target="marketplace">二手</button>
-        <button class="nav-item" data-target="booking">预约</button>
-        <button class="nav-item" data-target="transit">出行</button>
-        <button class="nav-item" data-target="activities">活动</button>
-        <button class="nav-item" data-target="moments">生活圈</button>
-        <button class="nav-item" data-target="profile">我的</button>
+      <nav class="bottom-nav" aria-label="主导航">
+        <button class="nav-item is-active" data-target="marketplace" type="button" aria-selected="true">
+          <span class="nav-symbol">⌘</span><span>二手</span>
+        </button>
+        <button class="nav-item" data-target="booking" type="button" aria-selected="false">
+          <span class="nav-symbol">□</span><span>预约</span>
+        </button>
+        <button class="nav-item" data-target="transit" type="button" aria-selected="false">
+          <span class="nav-symbol">→</span><span>出行</span>
+        </button>
+        <button class="nav-item" data-target="activities" type="button" aria-selected="false">
+          <span class="nav-symbol">＋</span><span>活动</span>
+        </button>
+        <button class="nav-item" data-target="moments" type="button" aria-selected="false">
+          <span class="nav-symbol">※</span><span>生活圈</span>
+        </button>
+        <button class="nav-item" data-target="profile" type="button" aria-selected="false">
+          <span class="nav-symbol">○</span><span>我的</span>
+        </button>
       </nav>
     </div>
 
-    <div id="toast" class="toast"></div>
+    <div id="toast" class="toast" role="status" aria-live="polite"></div>
     <script src="/app.js"></script>
   </body>
 </html>

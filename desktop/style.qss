@@ -1,257 +1,348 @@
+/* 全局基础设置 */
 QWidget {
-    background: {{BG}};
-    color: {{TEXT}};
-    font-family: "Microsoft YaHei UI";
+    background-color: #F8F9FA;
+    font-family: "Microsoft YaHei", "PingFang SC", "Helvetica Neue", Helvetica, sans-serif;
     font-size: 14px;
+    color: #212529;
 }
 
-QMainWindow {
-    background: {{BG}};
+QMainWindow, QDialog {
+    background-color: #F8F9FA;
 }
 
-QLabel,
-QFrame > QLabel,
-QWidget > QLabel {
+QLabel {
     background: transparent;
 }
 
-QWidget#contentSurface,
-QWidget#authSurface,
-QWidget#sectionWrap,
-QWidget#textWrap {
-    background: transparent;
+/* 输入框风格 */
+QLineEdit, QTextEdit, QComboBox {
+    border: 1px solid #CED4DA;
+    border-radius: 6px;
+    padding: 6px 12px;
+    background-color: #FFFFFF;
+    selection-background-color: #D6E4F7;
 }
 
-QFrame#sidebar {
-    background: {{SIDEBAR}};
+QLineEdit:focus, QTextEdit:focus, QComboBox:focus {
+    border: 1.5px solid #003B7C;
+}
+
+QComboBox::drop-down {
+    border: none;
+    width: 28px;
+}
+
+/* 按钮风格组合 */
+QPushButton {
+    font-weight: bold;
+    border-radius: 6px;
+    padding: 8px 16px;
+    background-color: #E9ECEF;
+    color: #212529;
+    border: 1px solid #CED4DA;
+}
+
+QPushButton:hover {
+    background-color: #DEE2E6;
+}
+
+QPushButton#primaryBtn {
+    background-color: #003B7C;
+    color: white;
     border: none;
 }
 
-QFrame#authHero {
-    background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
-        stop:0 #0C1626, stop:0.50 {{ACCENT_ALT}}, stop:1 {{ACCENT}});
+QPushButton#primaryBtn:hover {
+    background-color: #002D62;
+}
+
+QPushButton#dangerBtn {
+    background-color: #E63946;
+    color: white;
     border: none;
 }
 
-QFrame#heroCard,
-QFrame#card,
-QFrame#metricCard,
-QFrame#toast {
-    background: {{CARD}};
+QPushButton#dangerBtn:hover {
+    background-color: #C81D25;
+}
+
+QPushButton#secondaryBtn {
+    background-color: #FFFFFF;
+    color: #003B7C;
+    border: 1px solid #B8C7DA;
+}
+
+QPushButton#secondaryBtn:hover {
+    background-color: #EEF4FB;
+}
+
+/* 卡片布局 */
+QFrame#cardFrame {
+    background-color: #FFFFFF;
+    border: 1px solid #E9ECEF;
+    border-radius: 8px;
+}
+
+/* 表格美化 */
+QTableWidget {
+    background-color: #FFFFFF;
+    border: 1px solid #E9ECEF;
+    gridline-color: #F1F3F5;
+    alternate-background-color: #FAFBFC;
+}
+
+QTableWidget::item {
+    padding: 6px;
+}
+
+QTableWidget::item:selected {
+    background-color: #D6E4F7;
+    color: #212529;
+}
+
+QHeaderView::section {
+    background-color: #003B7C;
+    color: white;
+    padding: 6px;
+    font-weight: bold;
     border: none;
-    border-radius: 16px;
 }
 
-QFrame#metricCard {
-    background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
-        stop:0 {{ACCENT}}, stop:1 {{ACCENT_ALT}});
-}
-
-QLabel#sidebarTitle {
+QScrollArea {
+    border: none;
     background: transparent;
+}
+
+QWidget#contentPage {
+    background-color: #F8F9FA;
+}
+
+/* 登录页 */
+QFrame#loginVisual {
+    background-color: #003B7C;
+}
+
+QLabel#loginLogo {
+    background-color: rgba(255, 255, 255, 0.16);
     color: white;
-    font-size: 24px;
-    font-weight: 600;
+    border: 1px solid rgba(255, 255, 255, 0.28);
+    border-radius: 8px;
+    padding: 10px 14px;
+    font-size: 18pt;
+    font-weight: bold;
 }
 
-QLabel#sidebarSubtitle {
-    background: transparent;
-    color: rgba(255,255,255,0.65);
-    font-size: 13px;
-    font-weight: 400;
-}
-
-QLabel#userBadge {
-    background: rgba(255,255,255,0.06);
+QLabel#loginHeroTitle {
     color: white;
-    border-radius: 16px;
-    padding: 20px;
-    font-size: 13px;
+    font-size: 26pt;
+    font-weight: bold;
 }
 
-QLabel#authTitle {
-    background: transparent;
-    color: white;
-    font-size: 28px;
-    font-weight: 600;
+QLabel#loginHeroSubtitle {
+    color: rgba(255, 255, 255, 0.84);
+    font-size: 12pt;
+    line-height: 1.6;
 }
 
-QLabel#authSubtitle,
-QLabel#authBullet {
-    background: transparent;
-    color: rgba(255,255,255,0.84);
-    font-size: 13px;
+QWidget#loginFormWrap {
+    background-color: #F8F9FA;
 }
 
+/* 字号层级 */
 QLabel#pageTitle {
-    background: transparent;
-    color: {{TEXT}};
-    font-size: 24px;
-    font-weight: 600;
+    color: #212529;
+    font-size: 18pt;
+    font-weight: bold;
 }
 
-QLabel#pageSubtitle,
-QLabel#mutedText,
-QLabel#heroHint {
-    background: transparent;
-    color: {{MUTED}};
-    font-size: 13px;
-    font-weight: 400;
+QLabel#sectionTitle {
+    color: #212529;
+    font-size: 14pt;
+    font-weight: bold;
 }
 
 QLabel#cardTitle {
-    background: transparent;
-    color: {{TEXT}};
-    font-size: 24px;
-    font-weight: 600;
+    color: #212529;
+    font-size: 12pt;
+    font-weight: bold;
 }
 
-QLabel#metricTitle {
-    background: transparent;
-    color: rgba(255,255,255,0.82);
-    font-size: 13px;
+QLabel#mutedText {
+    color: #6C757D;
 }
 
-QLabel#metricValue {
-    background: transparent;
+QLabel#priceText {
+    color: #E63946;
+    font-size: 13pt;
+    font-weight: bold;
+}
+
+/* 左侧导航栏 */
+QFrame#userSidebar {
+    background-color: #003B7C;
+}
+
+QFrame#adminSidebar {
+    background-color: #212529;
+}
+
+QLabel#sidebarBrand {
     color: white;
-    font-size: 24px;
-    font-weight: 600;
+    font-size: 18pt;
+    font-weight: bold;
 }
 
-QLineEdit,
-QTextEdit,
-QComboBox,
-QListWidget,
-QTableWidget {
-    background: {{CARD}};
-    color: {{TEXT}};
-    border: 1px solid {{BORDER}};
-    border-radius: 16px;
-    padding: 20px;
-    selection-background-color: {{SOFT}};
-    selection-color: {{TEXT}};
-}
-
-QTextEdit {
-    line-height: 1.6;
+QLabel#sidebarUser {
+    color: rgba(255, 255, 255, 0.86);
+    background-color: rgba(255, 255, 255, 0.12);
+    border-radius: 8px;
+    padding: 12px;
 }
 
 QListWidget#navList {
     background: transparent;
     border: none;
-    color: rgba(255,255,255,0.88);
     outline: none;
-    padding: 0;
-}
-
-QListWidget#navList::item {
-    background: transparent;
-    padding: 16px 18px;
-    margin: 6px 0;
-    border-radius: 16px;
-}
-
-QListWidget#navList::item:selected {
-    background: rgba(255,255,255,0.12);
     color: white;
 }
 
+QListWidget#navList::item {
+    padding: 11px 12px;
+    margin: 3px 0;
+    border-radius: 6px;
+    color: white;
+}
+
+QListWidget#navList::item:hover {
+    background-color: rgba(255, 255, 255, 0.12);
+}
+
+QListWidget#navList::item:selected {
+    background-color: rgba(255, 255, 255, 0.22);
+    color: white;
+    font-weight: bold;
+}
+
+/* KPI */
+QLabel#kpiTitle {
+    color: #6C757D;
+    font-size: 10.5pt;
+}
+
+QLabel#kpiValue {
+    color: #003B7C;
+    font-size: 24pt;
+    font-weight: bold;
+}
+
+/* 生活圈列表 */
 QListWidget#momentList {
-    background: transparent;
+    background-color: transparent;
     border: none;
     outline: none;
 }
 
 QListWidget#momentList::item {
-    background: {{SOFT}};
-    border-radius: 16px;
-    padding: 18px;
-    margin: 0 0 12px 0;
+    background-color: #FFFFFF;
+    border: 1px solid #E9ECEF;
+    border-radius: 8px;
+    padding: 12px;
+    margin: 0 0 8px 0;
 }
 
 QListWidget#momentList::item:selected {
-    background: rgba(29,78,216,0.10);
+    background-color: #EAF2FB;
+    color: #212529;
 }
 
-QPushButton {
-    background: {{ACCENT_ALT}};
+/* 状态与提示 */
+QLabel#statusBadge {
+    border-radius: 10px;
+    padding: 3px 8px;
+    font-size: 9pt;
+    font-weight: bold;
+}
+
+QLabel#statusBadge[tone="success"] {
+    color: #00A896;
+    background-color: #E7F8F5;
+}
+
+QLabel#statusBadge[tone="danger"] {
+    color: #E63946;
+    background-color: #FDECEC;
+}
+
+QLabel#statusBadge[tone="muted"] {
+    color: #6C757D;
+    background-color: #F1F3F5;
+}
+
+QFrame#toast {
+    background-color: #FFFFFF;
+    border: 1px solid #E9ECEF;
+    border-radius: 8px;
+}
+
+QLabel#toastIcon {
+    min-width: 24px;
+    min-height: 24px;
+    max-width: 24px;
+    max-height: 24px;
+    border-radius: 12px;
     color: white;
-    border: none;
-    border-radius: 16px;
-    padding: 12px 20px;
-    font-size: 14px;
-    font-weight: 600;
-}
-
-QPushButton:hover {
-    background: {{ACCENT_ALT_HOVER}};
-}
-
-QPushButton#secondaryButton {
-    background: {{SOFT}};
-    color: {{TEXT}};
-    border: none;
-}
-
-QPushButton#secondaryButton:hover {
-    background: {{SOFT_HOVER}};
-}
-
-QPushButton#chipButton {
-    background: {{SOFT}};
-    color: {{TEXT}};
-    border: none;
-    padding: 10px 16px;
-}
-
-QPushButton#chipButton:hover {
-    background: {{SOFT_HOVER}};
-}
-
-QPushButton#productCard {
-    background: {{CARD}};
-    border: none;
-    border-radius: 16px;
-    text-align: left;
-}
-
-QPushButton#productCard:hover {
-    background: {{CARD_HOVER}};
-}
-
-QHeaderView::section {
-    background: transparent;
-    color: {{MUTED}};
-    border: none;
-    border-bottom: 1px solid {{BORDER}};
-    padding: 14px 12px;
-    font-size: 13px;
-    font-weight: 600;
-}
-
-QLabel#toastBadge {
-    background: {{ACCENT_ALT}};
-    min-width: 28px;
-    min-height: 28px;
-    max-width: 28px;
-    max-height: 28px;
-    border-radius: 14px;
-    color: white;
-    font-weight: 600;
+    font-weight: bold;
     qproperty-alignment: AlignCenter;
 }
 
-QLabel#toastTitle {
-    background: transparent;
-    color: {{TEXT}};
-    font-size: 14px;
-    font-weight: 600;
+QLabel#toastIcon[tone="success"] {
+    background-color: #00A896;
 }
 
-QLabel#toastBody {
-    background: transparent;
-    color: {{MUTED}};
-    font-size: 13px;
+QLabel#toastIcon[tone="danger"] {
+    background-color: #E63946;
 }
 
+QLabel#toastText {
+    color: #212529;
+}
+
+/* 多级弹窗与详情层 */
+QDialog {
+    background-color: #F8F9FA;
+}
+
+QLabel#dialogTitle {
+    color: #003B7C;
+    font-size: 18pt;
+    font-weight: bold;
+}
+
+QLabel#dialogBody {
+    color: #495057;
+    font-size: 11pt;
+    line-height: 1.5;
+}
+
+QLabel#dialogHint {
+    color: #6C757D;
+    font-size: 10.5pt;
+}
+
+QFrame#detailMeta {
+    background-color: #FFFFFF;
+    border: 1px solid #E9ECEF;
+    border-radius: 8px;
+}
+
+QLabel#metaLabel {
+    color: #6C757D;
+    font-size: 9pt;
+    font-weight: bold;
+}
+
+QLabel#metaValue {
+    color: #212529;
+    font-size: 11pt;
+    font-weight: bold;
+}
