@@ -1,241 +1,308 @@
+/* ========================================
+   兰大生活助手 - 高级UI样式表
+   ======================================== */
+
 /* 全局基础设置 */
 QWidget {
-    background-color: #F8F9FA;
-    font-family: "Microsoft YaHei", "PingFang SC", "Helvetica Neue", Helvetica, sans-serif;
+    background-color: #F5F7FA;
+    font-family: "Microsoft YaHei", "PingFang SC", "SF Pro Display", "Helvetica Neue", sans-serif;
     font-size: 14px;
-    color: #212529;
+    color: #1A1A2E;
 }
 
 QMainWindow, QDialog {
-    background-color: #F8F9FA;
+    background-color: #F5F7FA;
 }
 
 QLabel {
     background: transparent;
 }
 
-/* 输入框风格 */
+/* ========================================
+   输入框风格 - 现代化设计
+   ======================================== */
 QLineEdit, QTextEdit, QComboBox {
-    border: 1px solid #CED4DA;
-    border-radius: 6px;
-    padding: 6px 12px;
+    border: 2px solid #E8ECF1;
+    border-radius: 10px;
+    padding: 10px 16px;
     background-color: #FFFFFF;
-    selection-background-color: #D6E4F7;
+    selection-background-color: #C9A962;
+    font-size: 14px;
+    color: #1A1A2E;
 }
 
 QLineEdit:focus, QTextEdit:focus, QComboBox:focus {
-    border: 1.5px solid #003B7C;
+    border: 2px solid #C9A962;
+    background-color: #FFFFFF;
+    box-shadow: 0 0 0 3px rgba(201, 169, 98, 0.1);
 }
 
 QComboBox::drop-down {
     border: none;
-    width: 28px;
+    width: 36px;
 }
 
-/* 按钮风格组合 */
+/* ========================================
+   按钮风格 - 高级质感
+   ======================================== */
 QPushButton {
     font-weight: bold;
-    border-radius: 6px;
-    padding: 8px 16px;
-    background-color: #E9ECEF;
-    color: #212529;
-    border: 1px solid #CED4DA;
+    border-radius: 10px;
+    padding: 12px 24px;
+    background-color: #E8ECF1;
+    color: #1A1A2E;
+    border: 2px solid #E8ECF1;
+    font-size: 14px;
+    min-height: 20px;
 }
 
 QPushButton:hover {
-    background-color: #DEE2E6;
+    background-color: #D1D9E6;
+    border-color: #D1D9E6;
 }
 
+QPushButton:pressed {
+    background-color: #C5CED8;
+}
+
+/* 主按钮 - 金色渐变 */
 QPushButton#primaryBtn {
-    background-color: #003B7C;
-    color: white;
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #C9A962, stop:1 #B8942F);
+    color: #FFFFFF;
     border: none;
+    font-weight: bold;
+    letter-spacing: 1px;
 }
 
 QPushButton#primaryBtn:hover {
-    background-color: #002D62;
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #D4B56E, stop:1 #C9A962);
 }
 
+QPushButton#primaryBtn:pressed {
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #B8942F, stop:1 #A8852A);
+}
+
+/* 危险按钮 - 渐变红 */
 QPushButton#dangerBtn {
-    background-color: #E63946;
-    color: white;
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #E74C3C, stop:1 #C0392B);
+    color: #FFFFFF;
     border: none;
+    font-weight: bold;
 }
 
 QPushButton#dangerBtn:hover {
-    background-color: #C81D25;
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #EC7063, stop:1 #E74C3C);
 }
 
+QPushButton#dangerBtn:pressed {
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #C0392B, stop:1 #A93226);
+}
+
+/* 次要按钮 - 透明边框 */
 QPushButton#secondaryBtn {
-    background-color: #FFFFFF;
-    color: #003B7C;
-    border: 1px solid #B8C7DA;
+    background-color: transparent;
+    color: #C9A962;
+    border: 2px solid #C9A962;
+    font-weight: bold;
 }
 
 QPushButton#secondaryBtn:hover {
-    background-color: #EEF4FB;
+    background-color: rgba(201, 169, 98, 0.1);
 }
 
-/* 卡片布局 */
+/* ========================================
+   卡片布局 - 高级阴影效果
+   ======================================== */
 QFrame#cardFrame {
     background-color: #FFFFFF;
-    border: 1px solid #E9ECEF;
-    border-radius: 8px;
+    border: 1px solid #E8ECF1;
+    border-radius: 16px;
+    padding: 20px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
 }
 
-/* 表格美化 */
+QFrame#cardFrame:hover {
+    border-color: #C9A962;
+    box-shadow: 0 8px 30px rgba(201, 169, 98, 0.15);
+}
+
+/* ========================================
+   表格美化 - 精致设计
+   ======================================== */
 QTableWidget {
     background-color: #FFFFFF;
-    border: 1px solid #E9ECEF;
-    gridline-color: #F1F3F5;
-    alternate-background-color: #FAFBFC;
+    border: 2px solid #E8ECF1;
+    border-radius: 12px;
+    gridline-color: #F0F2F5;
+    alternate-background-color: #FAFBFD;
+    font-size: 13px;
+    selection-background-color: rgba(201, 169, 98, 0.2);
 }
 
 QTableWidget::item {
-    padding: 6px;
+    padding: 12px 16px;
+    border-bottom: 1px solid #F0F2F5;
 }
 
 QTableWidget::item:selected {
-    background-color: #D6E4F7;
-    color: #212529;
+    background-color: rgba(201, 169, 98, 0.2);
+    color: #1A1A2E;
 }
 
 QHeaderView::section {
-    background-color: #003B7C;
-    color: white;
-    padding: 6px;
+    background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #1A1A2E, stop:1 #16213E);
+    color: #C9A962;
+    padding: 14px 16px;
     font-weight: bold;
     border: none;
+    font-size: 13px;
+    letter-spacing: 1px;
 }
 
-QScrollArea {
-    border: none;
+QHeaderView::section:hover {
+    background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #16213E, stop:1 #0F3460);
+}
+
+/* ========================================
+   滚动条 - 精致设计
+   ======================================== */
+QScrollBar:vertical {
+    background: transparent;
+    width: 10px;
+    margin: 0;
+}
+
+QScrollBar::handle:vertical {
+    background: #C9A962;
+    min-height: 30px;
+    border-radius: 5px;
+}
+
+QScrollBar::handle:vertical:hover {
+    background: #B8942F;
+}
+
+QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
+    height: 0;
+}
+
+QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {
     background: transparent;
 }
 
-QWidget#contentPage {
-    background-color: #F8F9FA;
-}
-
-/* 登录页 */
+/* ========================================
+   登录页 - 奢华渐变
+   ======================================== */
 QFrame#loginVisual {
-    background-color: #003B7C;
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #1A1A2E, stop:0.5 #16213E, stop:1 #0F3460);
+    border-radius: 0px;
 }
 
 QLabel#loginLogo {
-    background-color: rgba(255, 255, 255, 0.16);
-    color: white;
-    border: 1px solid rgba(255, 255, 255, 0.28);
-    border-radius: 8px;
-    padding: 10px 14px;
-    font-size: 18pt;
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #C9A962, stop:1 #B8942F);
+    color: #FFFFFF;
+    border: none;
+    border-radius: 16px;
+    padding: 16px 24px;
+    font-size: 24pt;
     font-weight: bold;
+    letter-spacing: 3px;
 }
 
 QLabel#loginHeroTitle {
-    color: white;
-    font-size: 26pt;
+    color: #FFFFFF;
+    font-size: 32pt;
     font-weight: bold;
+    margin-bottom: 12px;
+    letter-spacing: 2px;
 }
 
 QLabel#loginHeroSubtitle {
-    color: rgba(255, 255, 255, 0.84);
-    font-size: 12pt;
-    line-height: 1.6;
+    color: rgba(255, 255, 255, 0.85);
+    font-size: 14pt;
+    line-height: 1.8;
 }
 
 QWidget#loginFormWrap {
-    background-color: #F8F9FA;
+    background-color: #FFFFFF;
+    border-left: 1px solid #E8ECF1;
 }
 
-/* 字号层级 */
-QLabel#pageTitle {
-    color: #212529;
-    font-size: 18pt;
-    font-weight: bold;
-}
-
-QLabel#sectionTitle {
-    color: #212529;
-    font-size: 14pt;
-    font-weight: bold;
-}
-
-QLabel#cardTitle {
-    color: #212529;
-    font-size: 12pt;
-    font-weight: bold;
-}
-
-QLabel#mutedText {
-    color: #6C757D;
-}
-
-QLabel#priceText {
-    color: #E63946;
-    font-size: 13pt;
-    font-weight: bold;
-}
-
-/* 左侧导航栏 */
+/* ========================================
+   导航栏 - 深色奢华
+   ======================================== */
 QFrame#userSidebar {
-    background-color: #003B7C;
+    background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #1A1A2E, stop:1 #16213E);
 }
 
 QFrame#adminSidebar {
-    background-color: #212529;
+    background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #0F0F1A, stop:1 #1A1A2E);
 }
 
 QLabel#sidebarBrand {
-    color: white;
-    font-size: 18pt;
+    color: #C9A962;
+    font-size: 22pt;
     font-weight: bold;
+    margin-bottom: 16px;
+    letter-spacing: 3px;
 }
 
 QLabel#sidebarUser {
-    color: rgba(255, 255, 255, 0.86);
-    background-color: rgba(255, 255, 255, 0.12);
-    border-radius: 8px;
-    padding: 12px;
+    color: rgba(255, 255, 255, 0.9);
+    background-color: rgba(201, 169, 98, 0.15);
+    border: 1px solid rgba(201, 169, 98, 0.3);
+    border-radius: 12px;
+    padding: 16px;
+    font-size: 12px;
 }
 
 QListWidget#navList {
     background: transparent;
     border: none;
     outline: none;
-    color: white;
+    color: #FFFFFF;
 }
 
 QListWidget#navList::item {
-    padding: 11px 12px;
-    margin: 3px 0;
-    border-radius: 6px;
-    color: white;
+    padding: 14px 18px;
+    margin: 6px 0;
+    border-radius: 10px;
+    color: rgba(255, 255, 255, 0.8);
+    font-size: 14px;
+    border-left: 3px solid transparent;
 }
 
 QListWidget#navList::item:hover {
-    background-color: rgba(255, 255, 255, 0.12);
+    background-color: rgba(201, 169, 98, 0.15);
+    color: #FFFFFF;
 }
 
 QListWidget#navList::item:selected {
-    background-color: rgba(255, 255, 255, 0.22);
-    color: white;
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 rgba(201, 169, 98, 0.3), stop:1 rgba(201, 169, 98, 0.1));
+    color: #C9A962;
     font-weight: bold;
+    border-left: 3px solid #C9A962;
 }
 
-/* KPI */
+/* ========================================
+   KPI指标 - 精致卡片
+   ======================================== */
 QLabel#kpiTitle {
-    color: #6C757D;
-    font-size: 10.5pt;
+    color: #6B7280;
+    font-size: 11pt;
+    font-weight: bold;
+    letter-spacing: 1px;
 }
 
 QLabel#kpiValue {
-    color: #003B7C;
-    font-size: 24pt;
+    color: #C9A962;
+    font-size: 28pt;
     font-weight: bold;
 }
 
-/* 生活圈列表 */
+/* ========================================
+   生活圈列表 - 现代卡片
+   ======================================== */
 QListWidget#momentList {
     background-color: transparent;
     border: none;
@@ -244,105 +311,318 @@ QListWidget#momentList {
 
 QListWidget#momentList::item {
     background-color: #FFFFFF;
-    border: 1px solid #E9ECEF;
-    border-radius: 8px;
-    padding: 12px;
-    margin: 0 0 8px 0;
+    border: 1px solid #E8ECF1;
+    border-radius: 12px;
+    padding: 16px;
+    margin: 0 0 10px 0;
+}
+
+QListWidget#momentList::item:hover {
+    border-color: #C9A962;
+    box-shadow: 0 4px 12px rgba(201, 169, 98, 0.15);
 }
 
 QListWidget#momentList::item:selected {
-    background-color: #EAF2FB;
-    color: #212529;
+    background-color: rgba(201, 169, 98, 0.1);
+    border-color: #C9A962;
+    color: #1A1A2E;
 }
 
-/* 状态与提示 */
+/* ========================================
+   状态徽章 - 精致设计
+   ======================================== */
 QLabel#statusBadge {
-    border-radius: 10px;
-    padding: 3px 8px;
-    font-size: 9pt;
+    border-radius: 12px;
+    padding: 4px 12px;
+    font-size: 10pt;
     font-weight: bold;
+    letter-spacing: 1px;
 }
 
 QLabel#statusBadge[tone="success"] {
-    color: #00A896;
-    background-color: #E7F8F5;
+    color: #27AE60;
+    background-color: rgba(39, 174, 96, 0.15);
+    border: 1px solid rgba(39, 174, 96, 0.3);
 }
 
 QLabel#statusBadge[tone="danger"] {
-    color: #E63946;
-    background-color: #FDECEC;
+    color: #E74C3C;
+    background-color: rgba(231, 76, 60, 0.15);
+    border: 1px solid rgba(231, 76, 60, 0.3);
 }
 
 QLabel#statusBadge[tone="muted"] {
-    color: #6C757D;
-    background-color: #F1F3F5;
+    color: #6B7280;
+    background-color: rgba(107, 114, 128, 0.15);
+    border: 1px solid rgba(107, 114, 128, 0.3);
 }
 
+/* ========================================
+   Toast提示 - 高级效果
+   ======================================== */
 QFrame#toast {
     background-color: #FFFFFF;
-    border: 1px solid #E9ECEF;
-    border-radius: 8px;
+    border: 1px solid #E8ECF1;
+    border-radius: 12px;
+    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.15);
 }
 
 QLabel#toastIcon {
-    min-width: 24px;
-    min-height: 24px;
-    max-width: 24px;
-    max-height: 24px;
-    border-radius: 12px;
+    min-width: 28px;
+    min-height: 28px;
+    max-width: 28px;
+    max-height: 28px;
+    border-radius: 14px;
     color: white;
     font-weight: bold;
+    font-size: 14px;
     qproperty-alignment: AlignCenter;
 }
 
 QLabel#toastIcon[tone="success"] {
-    background-color: #00A896;
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #27AE60, stop:1 #219A52);
 }
 
 QLabel#toastIcon[tone="danger"] {
-    background-color: #E63946;
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #E74C3C, stop:1 #C0392B);
 }
 
 QLabel#toastText {
-    color: #212529;
+    color: #1A1A2E;
+    font-weight: 500;
 }
 
-/* 多级弹窗与详情层 */
+/* ========================================
+   弹窗与详情层 - 精致设计
+   ======================================== */
 QDialog {
-    background-color: #F8F9FA;
+    background-color: #F5F7FA;
+    border-radius: 16px;
 }
 
 QLabel#dialogTitle {
-    color: #003B7C;
-    font-size: 18pt;
+    color: #C9A962;
+    font-size: 22pt;
     font-weight: bold;
+    margin-bottom: 10px;
+    letter-spacing: 1px;
 }
 
 QLabel#dialogBody {
-    color: #495057;
-    font-size: 11pt;
-    line-height: 1.5;
+    color: #4B5563;
+    font-size: 12pt;
+    line-height: 1.7;
 }
 
 QLabel#dialogHint {
-    color: #6C757D;
-    font-size: 10.5pt;
+    color: #6B7280;
+    font-size: 11pt;
 }
 
 QFrame#detailMeta {
     background-color: #FFFFFF;
-    border: 1px solid #E9ECEF;
-    border-radius: 8px;
+    border: 1px solid #E8ECF1;
+    border-radius: 12px;
+    padding: 20px;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.06);
 }
 
 QLabel#metaLabel {
-    color: #6C757D;
-    font-size: 9pt;
+    color: #9CA3AF;
+    font-size: 10pt;
     font-weight: bold;
+    letter-spacing: 1px;
 }
 
 QLabel#metaValue {
-    color: #212529;
-    font-size: 11pt;
+    color: #1A1A2E;
+    font-size: 12pt;
     font-weight: bold;
+}
+
+/* ========================================
+   页面标题 - 精致设计
+   ======================================== */
+QLabel#pageTitle {
+    color: #1A1A2E;
+    font-size: 22pt;
+    font-weight: bold;
+    letter-spacing: 1px;
+}
+
+QLabel#sectionTitle {
+    color: #1A1A2E;
+    font-size: 16pt;
+    font-weight: bold;
+    letter-spacing: 0.5px;
+}
+
+QLabel#cardTitle {
+    color: #1A1A2E;
+    font-size: 14pt;
+    font-weight: bold;
+}
+
+QLabel#mutedText {
+    color: #6B7280;
+    font-size: 13px;
+}
+
+QLabel#priceText {
+    color: #C9A962;
+    font-size: 16pt;
+    font-weight: bold;
+}
+
+/* ========================================
+   内容页面 - 精致设计
+   ======================================== */
+QWidget#contentPage {
+    background-color: #F5F7FA;
+}
+
+QScrollArea {
+    border: none;
+    background: transparent;
+}
+
+/* ========================================
+   分组框 - 精致设计
+   ======================================== */
+QGroupBox {
+    background-color: #FFFFFF;
+    border: 1px solid #E8ECF1;
+    border-radius: 12px;
+    margin-top: 20px;
+    padding-top: 30px;
+    font-weight: bold;
+    color: #1A1A2E;
+}
+
+QGroupBox::title {
+    subcontrol-origin: margin;
+    left: 20px;
+    padding: 0 10px;
+    color: #C9A962;
+}
+
+/* ========================================
+   进度条 - 精致设计
+   ======================================== */
+QProgressBar {
+    border: none;
+    border-radius: 6px;
+    background-color: #E8ECF1;
+    text-align: center;
+    color: #1A1A2E;
+    font-weight: bold;
+}
+
+QProgressBar::chunk {
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #C9A962, stop:1 #B8942F);
+    border-radius: 6px;
+}
+
+/* ========================================
+   工具提示 - 精致设计
+   ======================================== */
+QToolTip {
+    background-color: #1A1A2E;
+    color: #FFFFFF;
+    border: none;
+    border-radius: 8px;
+    padding: 10px 14px;
+    font-size: 12px;
+}
+
+/* ========================================
+   标签页 - 精致设计
+   ======================================== */
+QTabWidget::pane {
+    border: 1px solid #E8ECF1;
+    border-radius: 8px;
+    background-color: #FFFFFF;
+}
+
+QTabBar::tab {
+    background-color: #E8ECF1;
+    color: #6B7280;
+    padding: 10px 20px;
+    border: none;
+    border-top-left-radius: 8px;
+    border-top-right-radius: 8px;
+    margin-right: 2px;
+    font-weight: bold;
+}
+
+QTabBar::tab:selected {
+    background-color: #FFFFFF;
+    color: #C9A962;
+}
+
+QTabBar::tab:hover:!selected {
+    background-color: #D1D9E6;
+}
+
+/* ========================================
+   复选框与单选框 - 精致设计
+   ======================================== */
+QCheckBox::indicator, QRadioButton::indicator {
+    width: 20px;
+    height: 20px;
+    border: 2px solid #E8ECF1;
+    border-radius: 4px;
+    background-color: #FFFFFF;
+}
+
+QCheckBox::indicator:checked, QRadioButton::indicator:checked {
+    background-color: #C9A962;
+    border-color: #C9A962;
+}
+
+QCheckBox::indicator:hover, QRadioButton::indicator:hover {
+    border-color: #C9A962;
+}
+
+/* ========================================
+   菜单 - 精致设计
+   ======================================== */
+QMenu {
+    background-color: #FFFFFF;
+    border: 1px solid #E8ECF1;
+    border-radius: 8px;
+    padding: 8px 0;
+}
+
+QMenu::item {
+    padding: 10px 30px;
+    color: #1A1A2E;
+}
+
+QMenu::item:selected {
+    background-color: rgba(201, 169, 98, 0.15);
+    color: #C9A962;
+}
+
+QMenu::separator {
+    height: 1px;
+    background-color: #E8ECF1;
+    margin: 8px 0;
+}
+
+/* ========================================
+   状态栏 - 精致设计
+   ======================================== */
+QStatusBar {
+    background-color: #1A1A2E;
+    color: #FFFFFF;
+    border: none;
+}
+
+/* ========================================
+   标题栏 - 精致设计
+   ======================================== */
+QTitleBar {
+    background-color: #1A1A2E;
+    color: #FFFFFF;
 }
