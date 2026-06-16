@@ -38,6 +38,13 @@ QLineEdit:focus, QTextEdit:focus, QComboBox:focus {
     box-shadow: 0 0 0 3px rgba(201, 169, 98, 0.15);
 }
 
+QTextEdit[readOnly="true"] {
+    border: 1px solid #E8ECF1;
+    background-color: #FAFBFD;
+    padding: 12px;
+    line-height: 1.6;
+}
+
 QComboBox::drop-down {
     border: none;
     width: 36px;

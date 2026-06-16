@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from PySide6.QtCore import QRectF, Qt, QTimer, Signal
+from PySide6.QtCore import QEasingCurve, QPropertyAnimation, QRectF, Qt, QTimer, Signal
 from PySide6.QtGui import QColor, QFont, QPainter, QPixmap
 from PySide6.QtWidgets import (
     QComboBox,
@@ -10,6 +10,7 @@ from PySide6.QtWidgets import (
     QFileDialog,
     QFormLayout,
     QFrame,
+    QGraphicsOpacityEffect,
     QGridLayout,
     QHBoxLayout,
     QHeaderView,
@@ -63,6 +64,43 @@ def set_secondary(button: QPushButton) -> QPushButton:
     return button
 
 
+def animate_number_count(label: QLabel, target: int, duration: int = 500) -> None:
+    from PySide6.QtCore import QVariantAnimation
+    anim = QVariantAnimation()
+    anim.setDuration(duration)
+    anim.setStartValue(0)
+    anim.setEndValue(target)
+    anim.setEasingCurve(QEasingCurve.OutCubic)
+    anim.valueChanged.connect(lambda v: label.setText(str(int(v))))
+    anim.start()
+    label._num_anim = anim
+
+
+def animate_dialog_open(dialog: QDialog) -> None:
+    effect = QGraphicsOpacityEffect(dialog)
+    dialog.setGraphicsEffect(effect)
+    anim_opacity = QPropertyAnimation(effect, b"opacity")
+    anim_opacity.setDuration(250)
+    anim_opacity.setStartValue(0.0)
+    anim_opacity.setEndValue(1.0)
+    anim_opacity.setEasingCurve(QEasingCurve.OutCubic)
+    anim_geometry = QPropertyAnimation(dialog, b"geometry")
+    anim_geometry.setDuration(250)
+    anim_geometry.setEasingCurve(QEasingCurve.OutCubic)
+    parent = dialog.parentWidget()
+    if parent:
+        center = parent.rect().center()
+        w, h = dialog.width(), dialog.height()
+        small = QRectF(center.x() - w // 4, center.y() - h // 4, w // 2, h // 2).toRect()
+        full = QRectF(center.x() - w // 2, center.y() - h // 2, w, h).toRect()
+        anim_geometry.setStartValue(small)
+        anim_geometry.setEndValue(full)
+    anim_opacity.start()
+    anim_geometry.start()
+    dialog._open_opacity = anim_opacity
+    dialog._open_geometry = anim_geometry
+
+
 def card_frame() -> QFrame:
     frame = QFrame()
     frame.setObjectName("cardFrame")
@@ -103,9 +141,12 @@ def product_pixmap(image_path: str | None, width: int, height: int) -> QPixmap:
 
 
 class Toast(QFrame):
+    _active_toasts: list = []
+
     def __init__(self, parent: QWidget, message: str, success: bool = True) -> None:
         super().__init__(parent)
         self.setObjectName("toast")
+        self.setFixedWidth(320)
         layout = QHBoxLayout(self)
         layout.setContentsMargins(14, 12, 14, 12)
         icon = QLabel("✓" if success else "!")
@@ -115,10 +156,99 @@ class Toast(QFrame):
         text.setObjectName("toastText")
         text.setWordWrap(True)
         layout.addWidget(icon)
-        layout.addWidget(text)
+        layout.addWidget(text, 1)
         self.adjustSize()
-        self.move(parent.width() - self.width() - 24, 24)
-        QTimer.singleShot(2200, self.deleteLater)
+        target_x = parent.width() - self.width() - 24
+        idx = len(Toast._active_toasts)
+        target_y = 24 + idx * (self.height() + 10)
+        start_x = parent.width() + 20
+        self.move(start_x, target_y)
+        Toast._active_toasts.append(self)
+        anim_in = QPropertyAnimation(self, b"pos")
+        anim_in.setDuration(300)
+        anim_in.setStartValue(self.pos())
+        anim_in.setEndValue(QRectF(target_x, target_y, 0, 0).toRect())
+        anim_in.setEasingCurve(QEasingCurve.OutCubic)
+        opacity = QGraphicsOpacityEffect(self)
+        self.setGraphicsEffect(opacity)
+        fade_in = QPropertyAnimation(opacity, b"opacity")
+        fade_in.setDuration(300)
+        fade_in.setStartValue(0.0)
+        fade_in.setEndValue(1.0)
+        anim_in.start()
+        fade_in.start()
+        self._anim_in = anim_in
+        self._fade_in = fade_in
+        QTimer.singleShot(2200, self._fade_out)
+
+    def _fade_out(self) -> None:
+        opacity = self.graphicsEffect()
+        if isinstance(opacity, QGraphicsOpacityEffect):
+            fade_out = QPropertyAnimation(opacity, b"opacity")
+            fade_out.setDuration(300)
+            fade_out.setStartValue(1.0)
+            fade_out.setEndValue(0.0)
+            fade_out.setEasingCurve(QEasingCurve.InCubic)
+            fade_out.start()
+            self._fade_out_anim = fade_out
+        slide_out = QPropertyAnimation(self, b"pos")
+        slide_out.setDuration(300)
+        slide_out.setStartValue(self.pos())
+        slide_out.setEndValue(QRectF(self.pos().x(), self.pos().y() - 40, 0, 0).toRect())
+        slide_out.setEasingCurve(QEasingCurve.InCubic)
+        slide_out.start()
+        self._slide_out = slide_out
+        if self in Toast._active_toasts:
+            Toast._active_toasts.remove(self)
+            self._reposition_remaining()
+        QTimer.singleShot(350, self.deleteLater)
+
+    def _reposition_remaining(self) -> None:
+        parent = self.parentWidget()
+        if not parent:
+            return
+        for i, toast in enumerate(Toast._active_toasts):
+            target_y = 24 + i * (toast.height() + 10)
+            anim = QPropertyAnimation(toast, b"pos")
+            anim.setDuration(200)
+            anim.setStartValue(toast.pos())
+            anim.setEndValue(QRectF(parent.width() - toast.width() - 24, target_y, 0, 0).toRect())
+            anim.setEasingCurve(QEasingCurve.OutCubic)
+            anim.start()
+            toast._reposition_anim = anim
+
+
+class AnimatedStackedWidget(QStackedWidget):
+    def __init__(self, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self._animating = False
+
+    def animated_switch(self, index: int) -> None:
+        if self._animating or index == self.currentIndex():
+            return
+        if index < 0 or index >= self.count():
+            return
+        old_widget = self.currentWidget()
+        self._animating = True
+        new_widget = self.widget(index)
+        opacity_effect = QGraphicsOpacityEffect(new_widget)
+        new_widget.setGraphicsEffect(opacity_effect)
+        new_widget.show()
+        fade_in = QPropertyAnimation(opacity_effect, b"opacity")
+        fade_in.setDuration(200)
+        fade_in.setStartValue(0.0)
+        fade_in.setEndValue(1.0)
+        fade_in.setEasingCurve(QEasingCurve.OutCubic)
+        fade_in.start()
+        self._fade_in = fade_in
+        self.setCurrentIndex(index)
+        fade_in.finished.connect(self._on_animation_done)
+
+    def _on_animation_done(self) -> None:
+        self._animating = False
+        widget = self.currentWidget()
+        if widget:
+            widget.setGraphicsEffect(None)
 
 
 class BarChart(QWidget):
@@ -201,6 +331,10 @@ class ProductDialog(QDialog):
             self.image_path = file_path
             self.image_label.setText(Path(file_path).name)
 
+    def showEvent(self, event) -> None:
+        super().showEvent(event)
+        animate_dialog_open(self)
+
 
 class ActivityDialog(QDialog):
     def __init__(self, parent: QWidget, model: AppModel) -> None:
@@ -229,6 +363,10 @@ class ActivityDialog(QDialog):
         layout.addRow("人数上限", self.capacity_input)
         layout.addRow("简介", self.summary_input)
         layout.addRow(submit)
+
+    def showEvent(self, event) -> None:
+        super().showEvent(event)
+        animate_dialog_open(self)
 
 
 class MomentDialog(QDialog):
@@ -261,6 +399,10 @@ class MomentDialog(QDialog):
             self.image_path = file_path
             self.image_label.setText(Path(file_path).name)
 
+    def showEvent(self, event) -> None:
+        super().showEvent(event)
+        animate_dialog_open(self)
+
 
 class CommentDialog(QDialog):
     def __init__(self, parent: QWidget, title: str = "发表评论", prompt: str = "填写内容") -> None:
@@ -279,6 +421,10 @@ class CommentDialog(QDialog):
         layout.addWidget(label)
         layout.addWidget(self.content_input, 1)
         layout.addWidget(submit)
+
+    def showEvent(self, event) -> None:
+        super().showEvent(event)
+        animate_dialog_open(self)
 
 
 class ConfirmDialog(QDialog):
@@ -307,6 +453,10 @@ class ConfirmDialog(QDialog):
         layout.addWidget(body)
         layout.addStretch(1)
         layout.addLayout(buttons)
+
+    def showEvent(self, event) -> None:
+        super().showEvent(event)
+        animate_dialog_open(self)
 
 
 class ReasonDialog(QDialog):
@@ -342,12 +492,17 @@ class ReasonDialog(QDialog):
     def reason(self) -> str:
         return self.reason_input.toPlainText().strip()
 
+    def showEvent(self, event) -> None:
+        super().showEvent(event)
+        animate_dialog_open(self)
+
 
 class DetailDialog(QDialog):
     def __init__(self, parent: QWidget, title: str, subtitle: str = "", status_text: str = "", status: str = "normal") -> None:
         super().__init__(parent)
         self.setWindowTitle(title)
         self.resize(720, 560)
+        self._setup_open_animation()
         self.root = QVBoxLayout(self)
         self.root.setContentsMargins(20, 20, 20, 20)
         self.root.setSpacing(14)
@@ -387,7 +542,11 @@ class DetailDialog(QDialog):
         box = QTextEdit()
         box.setReadOnly(True)
         box.setMinimumHeight(min_height)
-        box.setPlainText(text)
+        formatted = text.replace("\n", "<br>")
+        box.setHtml(
+            f'<div style="color:#1A1A2E; font-size:14px; line-height:1.7; padding:8px;">'
+            f'{formatted}</div>'
+        )
         self.root.addWidget(label)
         self.root.addWidget(box)
         return box
@@ -400,6 +559,13 @@ class DetailDialog(QDialog):
             button.clicked.connect(handler)
             buttons.addWidget(button)
         self.root.addLayout(buttons)
+
+    def _setup_open_animation(self) -> None:
+        pass
+
+    def showEvent(self, event) -> None:
+        super().showEvent(event)
+        animate_dialog_open(self)
 
 
 class AuthPage(QWidget):
@@ -535,7 +701,7 @@ class MainWindow(QMainWindow):
         self.setWindowTitle("兰大生活助手")
         self.resize(1100, 700)
         self.setMinimumSize(1100, 700)
-        self.root_stack = QStackedWidget()
+        self.root_stack = AnimatedStackedWidget()
         self.user_nav: QListWidget | None = None
         self.admin_nav: QListWidget | None = None
         self.user_pages: QStackedWidget | None = None
@@ -654,7 +820,7 @@ class MainWindow(QMainWindow):
         return page, body_layout
 
     def _build_user_shell(self) -> QWidget:
-        self.user_pages = QStackedWidget()
+        self.user_pages = AnimatedStackedWidget()
         self.user_pages.addWidget(self._build_user_home())
         self.user_pages.addWidget(self._build_market_page())
         self.user_pages.addWidget(self._build_booking_page())
@@ -664,7 +830,7 @@ class MainWindow(QMainWindow):
         self.user_pages.addWidget(self._build_profile_page())
         sidebar = self._build_sidebar(admin=False)
         assert self.user_nav is not None
-        self.user_nav.currentRowChanged.connect(self.user_pages.setCurrentIndex)
+        self.user_nav.currentRowChanged.connect(self.user_pages.animated_switch)
         self.user_nav.setCurrentRow(0)
         return self._shell_page(sidebar, self.user_pages)
 
@@ -872,7 +1038,7 @@ class MainWindow(QMainWindow):
         return page
 
     def _build_admin_shell(self) -> QWidget:
-        self.admin_pages = QStackedWidget()
+        self.admin_pages = AnimatedStackedWidget()
         self.admin_pages.addWidget(self._build_admin_overview())
         self.admin_pages.addWidget(self._build_admin_users())
         self.admin_pages.addWidget(self._build_admin_products())
@@ -882,7 +1048,7 @@ class MainWindow(QMainWindow):
         self.admin_pages.addWidget(self._build_admin_logs())
         sidebar = self._build_sidebar(admin=True)
         assert self.admin_nav is not None
-        self.admin_nav.currentRowChanged.connect(self.admin_pages.setCurrentIndex)
+        self.admin_nav.currentRowChanged.connect(self.admin_pages.animated_switch)
         self.admin_nav.setCurrentRow(0)
         return self._shell_page(sidebar, self.admin_pages)
 
@@ -1071,9 +1237,25 @@ class MainWindow(QMainWindow):
     def refresh_home(self) -> None:
         summary = self.model.dashboard_summary()
         for key, value in summary["totals"].items():
-            self.user_kpi_labels[key].setText(str(value))
-        self.home_products.setPlainText("\n".join(f"{p['title']} / ¥{p['price']:.0f} / {p['seller_name']}" for p in summary["recent_products"]))
-        self.home_activities.setPlainText("\n".join(f"{a['title']} / {a['start_time']} / {a['location']}" for a in summary["recent_activities"]))
+            animate_number_count(self.user_kpi_labels[key], value)
+        products_html = "".join(
+            f'<div style="border-bottom:1px solid #E8ECF1; padding:10px 0;">'
+            f'<div><b style="color:#C9A962; font-size:15px;">{p["title"]}</b> '
+            f'<span style="color:#E74C3C; font-weight:bold; font-size:15px;">¥{p["price"]:.0f}</span></div>'
+            f'<div style="color:#6B7280; font-size:13px; margin-top:4px;">{p["seller_name"]}</div>'
+            f'</div>'
+            for p in summary["recent_products"]
+        ) or '<div style="color:#9CA3AF; padding:20px; text-align:center;">暂无商品</div>'
+        self.home_products.setHtml(products_html)
+        activities_html = "".join(
+            f'<div style="border-bottom:1px solid #E8ECF1; padding:10px 0;">'
+            f'<div><b style="color:#1A1A2E; font-size:15px;">{a["title"]}</b></div>'
+            f'<div style="color:#6B7280; font-size:13px; margin-top:4px;">'
+            f'🕐 {a["start_time"]} · 📍 {a["location"]}</div>'
+            f'</div>'
+            for a in summary["recent_activities"]
+        ) or '<div style="color:#9CA3AF; padding:20px; text-align:center;">暂无活动</div>'
+        self.home_activities.setHtml(activities_html)
 
     def clear_grid(self, grid: QGridLayout) -> None:
         while grid.count():
@@ -1236,7 +1418,19 @@ class MainWindow(QMainWindow):
             self.bus_table,
             [[r["route_name"], r["from_campus"], r["to_campus"], r["station"], r["departure_time"], str(r["seats_left"])] for r in self.bus_rows],
         )
-        self.ticket_text.setPlainText("\n".join(f"{t['ride_date']} {t['departure_time']} / {t['route_name']} / {t['station']} / {STATUS_LABELS.get(t['status'], t['status'])}" for t in self.model.list_my_tickets()) or "暂无车票")
+        tickets = self.model.list_my_tickets()
+        if tickets:
+            tickets_html = "".join(
+                f'<div style="border-bottom:1px solid #E8ECF1; padding:10px 0;">'
+                f'<div><b style="color:#1A1A2E; font-size:15px;">{t["route_name"]}</b></div>'
+                f'<div style="color:#6B7280; font-size:13px; margin-top:4px;">'
+                f'📅 {t["ride_date"]} {t["departure_time"]} · 📍 {t["station"]}</div>'
+                f'</div>'
+                for t in tickets
+            )
+        else:
+            tickets_html = '<div style="color:#9CA3AF; padding:20px; text-align:center;">暂无车票</div>'
+        self.ticket_text.setHtml(tickets_html)
 
     def capture_route_selection(self) -> None:
         row = self.bus_table.currentRow()
@@ -1281,7 +1475,21 @@ class MainWindow(QMainWindow):
         detail = self.model.get_activity(self.current_activity_id)
         if detail is None:
             return
-        self.activity_detail.setPlainText(f"{detail['title']}\n\n{detail['summary']}\n\n报名人数：{detail['registered_count']} / {detail['capacity']}，双击或点击报名前可查看完整详情。")
+        ratio = detail['registered_count'] / detail['capacity'] if detail['capacity'] > 0 else 0
+        bar_color = "#27AE60" if ratio < 0.7 else "#E74C3C" if ratio >= 0.95 else "#C9A962"
+        self.activity_detail.setHtml(
+            f'<div style="padding:8px 0;">'
+            f'<div style="font-size:18px; font-weight:bold; color:#1A1A2E;">{detail["title"]}</div>'
+            f'<div style="color:#6B7280; font-size:13px; margin-top:12px; line-height:1.7;">{detail["summary"]}</div>'
+            f'<div style="margin-top:16px; padding:12px; background:#FAFBFD; border-radius:8px;">'
+            f'<div style="color:#6B7280; font-size:13px; margin-bottom:8px;">报名进度</div>'
+            f'<div style="background:#E8ECF1; border-radius:6px; height:8px; overflow:hidden;">'
+            f'<div style="background:{bar_color}; width:{min(ratio * 100, 100):.0f}%; height:100%; border-radius:6px;"></div>'
+            f'</div>'
+            f'<div style="color:#1A1A2E; font-weight:bold; margin-top:6px; font-size:14px;">'
+            f'{detail["registered_count"]} / {detail["capacity"]} 人已报名</div>'
+            f'</div></div>'
+        )
 
     def show_activity_detail_dialog(self) -> bool:
         if self.current_activity_id is None:
@@ -1384,9 +1592,31 @@ class MainWindow(QMainWindow):
         detail = self.model.get_moment(self.current_moment_id)
         if detail is None:
             return
-        comments = "\n".join(f"[{c['created_at']}] {c['display_name']}: {c['content']}" for c in detail["comments"]) or "暂无评论"
-        self.moment_detail.setPlainText(
-            f"作者：{detail['display_name']}\n分类：{detail['category']}\n时间：{detail['created_at']}\n点赞：{detail['like_count']}  评论：{detail['comment_count']}\n状态：{STATUS_LABELS.get(detail['status'], detail['status'])}\n\n{detail['content']}\n\n评论区：\n{comments}"
+        if detail["comments"]:
+            comments_html = "".join(
+                f'<div style="border-bottom:1px solid #E8ECF1; padding:10px 0;">'
+                f'<div style="color:#6B7280; font-size:12px;">'
+                f'<b style="color:#1A1A2E;">{c["display_name"]}</b> · {c["created_at"]}</div>'
+                f'<div style="margin-top:4px; color:#1A1A2E;">{c["content"]}</div>'
+                f'</div>'
+                for c in detail["comments"]
+            )
+        else:
+            comments_html = '<div style="color:#9CA3AF; padding:16px; text-align:center;">暂无评论</div>'
+        self.moment_detail.setHtml(
+            f'<div style="padding:8px 0;">'
+            f'<div style="display:flex; gap:12px; color:#6B7280; font-size:13px; margin-bottom:12px;">'
+            f'<span>👤 {detail["display_name"]}</span>'
+            f'<span>📁 {detail["category"]}</span>'
+            f'<span>🕐 {detail["created_at"]}</span>'
+            f'<span>❤️ {detail["like_count"]}</span>'
+            f'<span>💬 {detail["comment_count"]}</span>'
+            f'</div>'
+            f'<div style="color:#1A1A2E; font-size:14px; line-height:1.8; margin:16px 0; padding:12px; background:#FAFBFD; border-radius:8px;">'
+            f'{detail["content"]}</div>'
+            f'<div style="border-top:2px solid #C9A962; padding-top:12px; margin-top:16px;">'
+            f'<div style="font-weight:bold; color:#C9A962; margin-bottom:8px;">评论区</div>'
+            f'{comments_html}</div></div>'
         )
 
     def show_moment_detail_dialog(self) -> bool:
@@ -1463,10 +1693,43 @@ class MainWindow(QMainWindow):
     def refresh_profile(self) -> None:
         data = self.model.profile_data()
         user = data["user"]
-        bookings = "\n".join(f"{b['name']} / {b['slot_date']} / {b['slot_time']} / {STATUS_LABELS.get(b['status'], b['status'])}" for b in data["bookings"]) or "暂无预约"
-        tickets = "\n".join(f"{t['ride_date']} / {t['route_name']} / {t['departure_time']}" for t in data["tickets"]) or "暂无车票"
-        self.profile_text.setPlainText(
-            f"姓名：{user['display_name']}\n账号：{user['username']}\n身份：{ROLE_LABELS.get(user['role'], user['role'])}\n状态：{STATUS_LABELS.get(user['status'], user['status'])}\n学院/单位：{user['college']}\n注册时间：{user['created_at']}\n\n在售商品：{data['product_count']}\n生活圈动态：{data['moment_count']}\n\n预约记录：\n{bookings}\n\n车票记录：\n{tickets}"
+        bookings_html = "".join(
+            f'<div style="border-bottom:1px solid #E8ECF1; padding:8px 0;">'
+            f'<b style="color:#1A1A2E;">{b["name"]}</b> '
+            f'<span style="color:#6B7280;">{b["slot_date"]} {b["slot_time"]}</span> '
+            f'<span style="color:{"#27AE60" if b["status"] == "normal" else "#E74C3C"}; font-weight:bold;">'
+            f'{STATUS_LABELS.get(b["status"], b["status"])}</span></div>'
+            for b in data["bookings"]
+        ) or '<div style="color:#9CA3AF; padding:12px; text-align:center;">暂无预约</div>'
+        tickets_html = "".join(
+            f'<div style="border-bottom:1px solid #E8ECF1; padding:8px 0;">'
+            f'<b style="color:#1A1A2E;">{t["route_name"]}</b> '
+            f'<span style="color:#6B7280;">{t["ride_date"]} {t["departure_time"]}</span></div>'
+            for t in data["tickets"]
+        ) or '<div style="color:#9CA3AF; padding:12px; text-align:center;">暂无车票</div>'
+        self.profile_text.setHtml(
+            f'<div style="padding:4px 0;">'
+            f'<table style="width:100%; border-collapse:collapse;">'
+            f'<tr><td style="color:#6B7280; padding:6px 12px 6px 0; font-size:13px; width:100px;">姓名</td>'
+            f'<td style="font-weight:bold; padding:6px 0;">{user["display_name"]}</td></tr>'
+            f'<tr><td style="color:#6B7280; padding:6px 12px 6px 0; font-size:13px;">账号</td>'
+            f'<td style="padding:6px 0;">{user["username"]}</td></tr>'
+            f'<tr><td style="color:#6B7280; padding:6px 12px 6px 0; font-size:13px;">身份</td>'
+            f'<td style="padding:6px 0;">{ROLE_LABELS.get(user["role"], user["role"])}</td></tr>'
+            f'<tr><td style="color:#6B7280; padding:6px 12px 6px 0; font-size:13px;">学院</td>'
+            f'<td style="padding:6px 0;">{user["college"]}</td></tr>'
+            f'<tr><td style="color:#6B7280; padding:6px 12px 6px 0; font-size:13px;">注册时间</td>'
+            f'<td style="padding:6px 0;">{user["created_at"]}</td></tr>'
+            f'</table>'
+            f'<div style="display:flex; gap:24px; margin:16px 0; padding:12px; background:#FAFBFD; border-radius:8px;">'
+            f'<div style="text-align:center;"><div style="font-size:20px; font-weight:bold; color:#C9A962;">{data["product_count"]}</div>'
+            f'<div style="color:#6B7280; font-size:12px;">在售商品</div></div>'
+            f'<div style="text-align:center;"><div style="font-size:20px; font-weight:bold; color:#C9A962;">{data["moment_count"]}</div>'
+            f'<div style="color:#6B7280; font-size:12px;">生活圈动态</div></div></div>'
+            f'<div style="margin-top:16px;"><div style="font-weight:bold; color:#C9A962; margin-bottom:8px;">预约记录</div>'
+            f'{bookings_html}</div>'
+            f'<div style="margin-top:16px;"><div style="font-weight:bold; color:#C9A962; margin-bottom:8px;">车票记录</div>'
+            f'{tickets_html}</div></div>'
         )
 
     def change_password(self) -> None:
@@ -1492,9 +1755,22 @@ class MainWindow(QMainWindow):
     def refresh_admin_overview(self) -> None:
         summary = self.model.admin_summary()
         for key, value in summary["totals"].items():
-            self.admin_kpi_labels[key].setText(str(value))
+            animate_number_count(self.admin_kpi_labels[key], value)
         self.admin_chart.set_data(summary["venue_hot"])
-        self.admin_recent_logs.setPlainText("\n".join(f"[{l['created_at']}] {l['admin_name']} {l['action']} - {l['detail']}" for l in summary["recent_logs"]) or "暂无操作日志")
+        logs = summary["recent_logs"]
+        if logs:
+            logs_html = "".join(
+                f'<div style="border-bottom:1px solid #E8ECF1; padding:10px 0;">'
+                f'<div style="color:#9CA3AF; font-size:12px;">{l["created_at"]}</div>'
+                f'<div style="margin-top:4px;"><b style="color:#1A1A2E;">{l["admin_name"]}</b> '
+                f'<span style="color:#C9A962; font-weight:bold;">{l["action"]}</span></div>'
+                f'<div style="color:#6B7280; font-size:13px; margin-top:2px;">{l["detail"]}</div>'
+                f'</div>'
+                for l in logs
+            )
+        else:
+            logs_html = '<div style="color:#9CA3AF; padding:20px; text-align:center;">暂无操作日志</div>'
+        self.admin_recent_logs.setHtml(logs_html)
 
     def capture_admin_selection(self, key: str, rows: list[dict], table: QTableWidget) -> None:
         row = table.currentRow()
