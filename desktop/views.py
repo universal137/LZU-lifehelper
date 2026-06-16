@@ -764,11 +764,11 @@ class MainWindow(QMainWindow):
         nav.setObjectName("navList")
         nav.setSpacing(6)
         if admin:
-            for item in ["数据总览", "用户管理", "商品管理", "预约管理", "活动管理", "生活圈审核", "操作日志"]:
+            for item in ["📊 数据总览", "👥 用户管理", "📦 商品管理", "📅 预约管理", "🎉 活动管理", "💬 生活圈审核", "📋 操作日志"]:
                 nav.addItem(QListWidgetItem(item))
             self.admin_nav = nav
         else:
-            for item in ["首页概览", "二手市场", "场馆预约", "校园出行", "活动中心", "生活圈", "个人中心"]:
+            for item in ["🏠 首页概览", "🛍 二手市场", "🏸 场馆预约", "🚌 校园出行", "🎉 活动中心", "💬 生活圈", "👤 个人中心"]:
                 nav.addItem(QListWidgetItem(item))
             self.user_nav = nav
         logout = set_secondary(QPushButton("退出登录"))
@@ -838,7 +838,7 @@ class MainWindow(QMainWindow):
         page, layout = self._content_page("首页概览", "校园服务集中入口，常用信息一屏查看。")
         cards = QHBoxLayout()
         self.user_kpi_labels: dict[str, QLabel] = {}
-        for key, title in [("products", "在售商品"), ("bookings", "我的预约"), ("tickets", "校车票"), ("activities", "已报名活动")]:
+        for key, title in [("products", "🛍 在售商品"), ("bookings", "📋 我的预约"), ("tickets", "🎫 校车票"), ("activities", "🎉 已报名活动")]:
             card = card_frame()
             c = QVBoxLayout(card)
             t = QLabel(title)
@@ -1056,7 +1056,7 @@ class MainWindow(QMainWindow):
         page, layout = self._content_page("数据总览", "系统后台核心指标与场馆预约热度。")
         cards = QHBoxLayout()
         self.admin_kpi_labels: dict[str, QLabel] = {}
-        for key, title in [("users", "用户总数"), ("today_bookings", "今日预约"), ("products", "在售商品"), ("moments", "动态数量")]:
+        for key, title in [("users", "👥 用户总数"), ("today_bookings", "📅 今日预约"), ("products", "📦 在售商品"), ("moments", "📝 动态数量")]:
             card = card_frame()
             c = QVBoxLayout(card)
             t = QLabel(title)
@@ -1205,6 +1205,14 @@ class MainWindow(QMainWindow):
         return table
 
     def fill_table(self, table: QTableWidget, rows: list[list[str]], status_column: int | None = None) -> None:
+        if not rows:
+            table.setRowCount(1)
+            table.setSpan(0, 0, 1, table.columnCount())
+            empty_item = QTableWidgetItem("暂无数据")
+            empty_item.setTextAlignment(Qt.AlignCenter)
+            empty_item.setForeground(QColor("#9CA3AF"))
+            table.setItem(0, 0, empty_item)
+            return
         table.setRowCount(len(rows))
         for r, values in enumerate(rows):
             row_status = values[status_column] if status_column is not None and status_column < len(values) else ""
@@ -1605,13 +1613,13 @@ class MainWindow(QMainWindow):
             comments_html = '<div style="color:#9CA3AF; padding:16px; text-align:center;">暂无评论</div>'
         self.moment_detail.setHtml(
             f'<div style="padding:8px 0;">'
-            f'<div style="display:flex; gap:12px; color:#6B7280; font-size:13px; margin-bottom:12px;">'
-            f'<span>👤 {detail["display_name"]}</span>'
-            f'<span>📁 {detail["category"]}</span>'
-            f'<span>🕐 {detail["created_at"]}</span>'
-            f'<span>❤️ {detail["like_count"]}</span>'
-            f'<span>💬 {detail["comment_count"]}</span>'
-            f'</div>'
+            f'<table style="width:100%; margin-bottom:12px;"><tr>'
+            f'<td style="color:#6B7280; font-size:13px; padding-right:16px;">👤 {detail["display_name"]}</td>'
+            f'<td style="color:#6B7280; font-size:13px; padding-right:16px;">📁 {detail["category"]}</td>'
+            f'<td style="color:#6B7280; font-size:13px; padding-right:16px;">🕐 {detail["created_at"]}</td>'
+            f'<td style="color:#6B7280; font-size:13px; padding-right:16px;">❤️ {detail["like_count"]}</td>'
+            f'<td style="color:#6B7280; font-size:13px;">💬 {detail["comment_count"]}</td>'
+            f'</tr></table>'
             f'<div style="color:#1A1A2E; font-size:14px; line-height:1.8; margin:16px 0; padding:12px; background:#FAFBFD; border-radius:8px;">'
             f'{detail["content"]}</div>'
             f'<div style="border-top:2px solid #C9A962; padding-top:12px; margin-top:16px;">'
@@ -1721,11 +1729,11 @@ class MainWindow(QMainWindow):
             f'<tr><td style="color:#6B7280; padding:6px 12px 6px 0; font-size:13px;">注册时间</td>'
             f'<td style="padding:6px 0;">{user["created_at"]}</td></tr>'
             f'</table>'
-            f'<div style="display:flex; gap:24px; margin:16px 0; padding:12px; background:#FAFBFD; border-radius:8px;">'
-            f'<div style="text-align:center;"><div style="font-size:20px; font-weight:bold; color:#C9A962;">{data["product_count"]}</div>'
-            f'<div style="color:#6B7280; font-size:12px;">在售商品</div></div>'
-            f'<div style="text-align:center;"><div style="font-size:20px; font-weight:bold; color:#C9A962;">{data["moment_count"]}</div>'
-            f'<div style="color:#6B7280; font-size:12px;">生活圈动态</div></div></div>'
+            f'<table style="width:100%; margin:16px 0; padding:12px; background:#FAFBFD; border-radius:8px; border-collapse:separate; border-spacing:24px 0;"><tr>'
+            f'<td style="text-align:center;"><div style="font-size:20px; font-weight:bold; color:#C9A962;">{data["product_count"]}</div>'
+            f'<div style="color:#6B7280; font-size:12px;">在售商品</div></td>'
+            f'<td style="text-align:center;"><div style="font-size:20px; font-weight:bold; color:#C9A962;">{data["moment_count"]}</div>'
+            f'<div style="color:#6B7280; font-size:12px;">生活圈动态</div></td></tr></table>'
             f'<div style="margin-top:16px;"><div style="font-weight:bold; color:#C9A962; margin-bottom:8px;">预约记录</div>'
             f'{bookings_html}</div>'
             f'<div style="margin-top:16px;"><div style="font-weight:bold; color:#C9A962; margin-bottom:8px;">车票记录</div>'
