@@ -928,6 +928,37 @@ class MainWindow(QMainWindow):
         self.model.logout()
         self.root_stack.setCurrentWidget(self.auth_page)
 
+    def show_about(self) -> None:
+        dialog = QDialog(self)
+        dialog.setWindowTitle("关于")
+        dialog.resize(400, 300)
+        layout = QVBoxLayout(dialog)
+        layout.setSpacing(16)
+        layout.setContentsMargins(30, 30, 30, 30)
+        logo = QLabel("LZU")
+        logo.setObjectName("loginLogo")
+        logo.setFixedSize(80, 50)
+        logo.setAlignment(Qt.AlignCenter)
+        layout.addWidget(logo, 0, Qt.AlignCenter)
+        title = QLabel("兰大生活助手")
+        title.setStyleSheet("font-size: 20px; font-weight: bold; color: #1A1A2E;")
+        title.setAlignment(Qt.AlignCenter)
+        layout.addWidget(title)
+        version = QLabel("版本 2.0.0")
+        version.setStyleSheet("color: #6B7280; font-size: 13px;")
+        version.setAlignment(Qt.AlignCenter)
+        layout.addWidget(version)
+        desc = QLabel("校园一站式服务平台\n二手市场 · 场馆预约 · 校园出行 · 活动中心 · 生活圈")
+        desc.setStyleSheet("color: #6B7280; font-size: 12px; line-height: 1.6;")
+        desc.setAlignment(Qt.AlignCenter)
+        desc.setWordWrap(True)
+        layout.addWidget(desc)
+        layout.addStretch(1)
+        close_btn = set_primary(QPushButton("确定"))
+        close_btn.clicked.connect(dialog.accept)
+        layout.addWidget(close_btn)
+        dialog.exec()
+
     def _build_sidebar(self, admin: bool = False) -> QFrame:
         user = self.model.require_user()
         side = QFrame()
@@ -968,6 +999,11 @@ class MainWindow(QMainWindow):
         layout.addWidget(nav, 1)
         layout.addSpacing(10)
         layout.addWidget(logout)
+        about_btn = QPushButton("ℹ 关于")
+        about_btn.setStyleSheet("color: rgba(255,255,255,0.5); background: transparent; border: none; font-size: 12px;")
+        about_btn.setCursor(Qt.PointingHandCursor)
+        about_btn.clicked.connect(self.show_about)
+        layout.addWidget(about_btn, 0, Qt.AlignCenter)
         return side
 
     def _shell_page(self, sidebar: QFrame, stack: QStackedWidget) -> QWidget:
@@ -1351,6 +1387,15 @@ class MainWindow(QMainWindow):
     def _build_admin_products(self) -> QWidget:
         page, layout = self._content_page("商品管理", "下架违规商品或恢复误操作商品。")
         tools = QHBoxLayout()
+        tools.setSpacing(12)
+        self.admin_product_filter = QLineEdit()
+        self.admin_product_filter.setPlaceholderText("搜索商品...")
+        self.admin_product_filter.setMinimumWidth(200)
+        self._admin_product_search_timer = QTimer()
+        self._admin_product_search_timer.setSingleShot(True)
+        self._admin_product_search_timer.setInterval(300)
+        self._admin_product_search_timer.timeout.connect(self.refresh_admin_products)
+        self.admin_product_filter.textChanged.connect(lambda: self._admin_product_search_timer.start())
         refresh = set_secondary(QPushButton("刷新"))
         refresh.clicked.connect(self.refresh_admin_products)
         detail = set_secondary(QPushButton("查看详情"))
@@ -1359,6 +1404,7 @@ class MainWindow(QMainWindow):
         remove.clicked.connect(lambda: self.admin_change_product("removed"))
         restore = set_primary(QPushButton("恢复商品"))
         restore.clicked.connect(lambda: self.admin_change_product("normal"))
+        tools.addWidget(self.admin_product_filter, 1)
         tools.addStretch(1)
         tools.addWidget(refresh)
         tools.addWidget(detail)
@@ -1983,7 +2029,9 @@ class MainWindow(QMainWindow):
         self.moment_list.clear()
         restore_row = 0
         for idx, row in enumerate(self.moment_rows):
-            item = QListWidgetItem(f"[{row['category']}] {row['display_name']}  {row['created_at']}\n♥ {row['like_count']}   评论 {row['comment_count']}\n{row['content'][:70]}")
+            like_text = f"❤️ {row['like_count']}" if row['like_count'] > 0 else "🤍 0"
+            comment_text = f"💬 {row['comment_count']}" if row['comment_count'] > 0 else "💬 0"
+            item = QListWidgetItem(f"[{row['category']}] {row['display_name']}  {row['created_at']}\n{like_text}   {comment_text}\n{row['content'][:70]}")
             item.setData(Qt.UserRole, row["id"])
             # 作者头像图标（彩色圆形+首字母）
             if not hasattr(self, "_moment_avatar_cache"):
@@ -2258,9 +2306,13 @@ class MainWindow(QMainWindow):
 
     def refresh_admin_products(self) -> None:
         self.admin_product_rows = self.model.admin_products()
+        keyword = self.admin_product_filter.text().strip().lower()
+        rows = self.admin_product_rows
+        if keyword:
+            rows = [r for r in rows if keyword in r["title"].lower() or keyword in r["category"].lower() or keyword in r["seller_name"].lower()]
         self.fill_table(
             self.admin_product_table,
-            [[r["title"], r["category"], r["campus"], f"¥{r['price']:.2f}", r["seller_name"], STATUS_LABELS.get(r["status"], r["status"]), r["created_at"]] for r in self.admin_product_rows],
+            [[r["title"], r["category"], r["campus"], f"¥{r['price']:.2f}", r["seller_name"], STATUS_LABELS.get(r["status"], r["status"]), r["created_at"]] for r in rows],
             5,
         )
 
