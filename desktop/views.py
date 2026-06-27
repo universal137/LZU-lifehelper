@@ -1,6 +1,11 @@
 from __future__ import annotations
 
+import html as _html
 from pathlib import Path
+
+
+def esc(text) -> str:
+    return _html.escape(str(text))
 
 from PySide6.QtCore import QEasingCurve, QPropertyAnimation, QRectF, QSize, Qt, QTimer, Signal
 from PySide6.QtGui import QColor, QFont, QPainter, QPixmap
@@ -388,114 +393,103 @@ class BarChart(QWidget):
         painter.end()
 
 
-class ProductDialog(QDialog):
-    def __init__(self, parent: QWidget, model: AppModel) -> None:
+class FormDialog(QDialog):
+    """通用表单对话框：接受字段配置列表，自动生成表单。
+
+    fields 格式:
+    {"name": str, "label": str, "type": "lineedit"|"combobox"|"textedit"|"image",
+     "items": list, "placeholder": str, "min_height": int}
+    """
+    def __init__(self, parent: QWidget, title: str, fields: list[dict], submit_text: str = "提交",
+                 width: int = 480, height: int = 460) -> None:
         super().__init__(parent)
-        self.model = model
+        self.setWindowTitle(title)
+        self.resize(width, height)
         self.image_path: str | None = None
-        self.setWindowTitle("发布商品")
-        self.resize(480, 460)
+        self.fields_widgets: dict[str, QWidget] = {}
         layout = QFormLayout(self)
         layout.setSpacing(16)
         layout.setContentsMargins(30, 30, 30, 30)
-        self.title_input = QLineEdit()
-        self.category_input = QComboBox()
-        self.category_input.addItems(self.model.product_categories()[1:])
-        self.campus_input = QComboBox()
-        self.campus_input.addItems(["榆中校区", "城关校区"])
-        self.price_input = QLineEdit()
-        self.desc_input = QTextEdit()
-        self.desc_input.setMinimumHeight(100)
-        self.image_label = QLabel("未选择图片")
-        pick = set_secondary(QPushButton("选择图片"))
-        pick.clicked.connect(self.pick_image)
-        submit = set_primary(QPushButton("确认发布"))
+        for f in fields:
+            name = f["name"]
+            if f["type"] == "lineedit":
+                w = QLineEdit()
+                if f.get("placeholder"):
+                    w.setPlaceholderText(f["placeholder"])
+            elif f["type"] == "combobox":
+                w = QComboBox()
+                w.addItems(f.get("items", []))
+            elif f["type"] == "textedit":
+                w = QTextEdit()
+                w.setMinimumHeight(f.get("min_height", 100))
+            elif f["type"] == "image":
+                img_label = QLabel("未选择图片")
+                pick_btn = set_secondary(QPushButton(f.get("button_text", "选择图片")))
+                pick_btn.clicked.connect(lambda _checked=False, lbl=img_label: self._pick_image(lbl))
+                layout.addRow(img_label, pick_btn)
+                self.fields_widgets[name] = img_label
+                continue
+            else:
+                continue
+            layout.addRow(f["label"], w)
+            self.fields_widgets[name] = w
+        submit = set_primary(QPushButton(submit_text))
         submit.clicked.connect(self.accept)
-        layout.addRow("标题", self.title_input)
-        layout.addRow("分类", self.category_input)
-        layout.addRow("校区", self.campus_input)
-        layout.addRow("价格", self.price_input)
-        layout.addRow("描述", self.desc_input)
-        layout.addRow(self.image_label, pick)
         layout.addRow(submit)
 
-    def pick_image(self) -> None:
+    def _pick_image(self, label: QLabel) -> None:
         file_path, _ = QFileDialog.getOpenFileName(self, "选择图片", str(APP_ROOT), "Images (*.png *.jpg *.jpeg *.bmp)")
         if file_path:
             self.image_path = file_path
-            self.image_label.setText(Path(file_path).name)
+            label.setText(Path(file_path).name)
+
+    def get_value(self, name: str) -> str:
+        w = self.fields_widgets.get(name)
+        if isinstance(w, QLineEdit):
+            return w.text()
+        elif isinstance(w, QComboBox):
+            return w.currentText()
+        elif isinstance(w, QTextEdit):
+            return w.toPlainText()
+        return ""
 
     def showEvent(self, event) -> None:
         super().showEvent(event)
         animate_dialog_open(self)
 
 
-class ActivityDialog(QDialog):
+# 向后兼容别名
+class ProductDialog(FormDialog):
     def __init__(self, parent: QWidget, model: AppModel) -> None:
-        super().__init__(parent)
-        self.model = model
-        self.setWindowTitle("发布活动")
-        self.resize(500, 420)
-        layout = QFormLayout(self)
-        layout.setSpacing(16)
-        layout.setContentsMargins(30, 30, 30, 30)
-        self.title_input = QLineEdit()
-        self.category_input = QComboBox()
-        self.category_input.addItems(self.model.activity_categories()[1:])
-        self.location_input = QLineEdit()
-        self.time_input = QLineEdit()
-        self.time_input.setPlaceholderText("例如 2026-06-20 19:00")
-        self.capacity_input = QLineEdit()
-        self.summary_input = QTextEdit()
-        self.summary_input.setMinimumHeight(100)
-        submit = set_primary(QPushButton("发布活动"))
-        submit.clicked.connect(self.accept)
-        layout.addRow("标题", self.title_input)
-        layout.addRow("分类", self.category_input)
-        layout.addRow("地点", self.location_input)
-        layout.addRow("时间", self.time_input)
-        layout.addRow("人数上限", self.capacity_input)
-        layout.addRow("简介", self.summary_input)
-        layout.addRow(submit)
-
-    def showEvent(self, event) -> None:
-        super().showEvent(event)
-        animate_dialog_open(self)
+        super().__init__(parent, "发布商品", [
+            {"name": "title", "label": "标题", "type": "lineedit", "placeholder": "商品标题"},
+            {"name": "category", "label": "分类", "type": "combobox", "items": model.product_categories()[1:]},
+            {"name": "campus", "label": "校区", "type": "combobox", "items": ["榆中校区", "城关校区"]},
+            {"name": "price", "label": "价格", "type": "lineedit", "placeholder": "元"},
+            {"name": "description", "label": "描述", "type": "textedit", "min_height": 100},
+            {"name": "image", "label": "", "type": "image"},
+        ], "确认发布", 480, 460)
 
 
-class MomentDialog(QDialog):
+class ActivityDialog(FormDialog):
     def __init__(self, parent: QWidget, model: AppModel) -> None:
-        super().__init__(parent)
-        self.model = model
-        self.image_path: str | None = None
-        self.setWindowTitle("发布动态")
-        self.resize(480, 360)
-        layout = QFormLayout(self)
-        layout.setSpacing(16)
-        layout.setContentsMargins(30, 30, 30, 30)
-        self.category_input = QComboBox()
-        self.category_input.addItems(self.model.moment_categories()[1:])
-        self.content_input = QTextEdit()
-        self.content_input.setMinimumHeight(120)
-        self.image_label = QLabel("未选择图片")
-        pick = set_secondary(QPushButton("附加图片"))
-        pick.clicked.connect(self.pick_image)
-        submit = set_primary(QPushButton("发布动态"))
-        submit.clicked.connect(self.accept)
-        layout.addRow("分类", self.category_input)
-        layout.addRow("内容", self.content_input)
-        layout.addRow(self.image_label, pick)
-        layout.addRow(submit)
+        super().__init__(parent, "发布活动", [
+            {"name": "title", "label": "标题", "type": "lineedit", "placeholder": "活动标题"},
+            {"name": "category", "label": "分类", "type": "combobox", "items": model.activity_categories()[1:]},
+            {"name": "location", "label": "地点", "type": "lineedit", "placeholder": "活动地点"},
+            {"name": "start_time", "label": "时间", "type": "lineedit", "placeholder": "例如 2026-06-20 19:00"},
+            {"name": "capacity", "label": "人数上限", "type": "lineedit", "placeholder": "数字"},
+            {"name": "summary", "label": "简介", "type": "textedit", "min_height": 100},
+        ], "发布活动", 500, 420)
 
-    def pick_image(self) -> None:
-        file_path, _ = QFileDialog.getOpenFileName(self, "选择图片", str(APP_ROOT), "Images (*.png *.jpg *.jpeg *.bmp)")
-        if file_path:
-            self.image_path = file_path
-            self.image_label.setText(Path(file_path).name)
 
-    def showEvent(self, event) -> None:
-        super().showEvent(event)
-        animate_dialog_open(self)
+class MomentDialog(FormDialog):
+    def __init__(self, parent: QWidget, model: AppModel) -> None:
+        super().__init__(parent, "发布动态", [
+            {"name": "category", "label": "分类", "type": "combobox", "items": model.moment_categories()[1:]},
+            {"name": "content", "label": "内容", "type": "textedit", "min_height": 120},
+            {"name": "image", "label": "", "type": "image", "button_text": "附加图片"},
+        ], "发布动态", 480, 360)
 
 
 class CommentDialog(QDialog):
@@ -636,7 +630,7 @@ class DetailDialog(QDialog):
         box = QTextEdit()
         box.setReadOnly(True)
         box.setMinimumHeight(min_height)
-        formatted = text.replace("\n", "<br>")
+        formatted = esc(text).replace("\n", "<br>")
         box.setHtml(
             f'<div style="color:#1A1A2E; font-size:14px; line-height:1.7; padding:8px;">'
             f'{formatted}</div>'
@@ -702,6 +696,7 @@ class AuthPage(QWidget):
         self._build_ui()
 
     def _build_ui(self) -> None:
+        from PySide6.QtWidgets import QTabWidget
         root = QHBoxLayout(self)
         root.setContentsMargins(0, 0, 0, 0)
         root.setSpacing(0)
@@ -726,12 +721,17 @@ class AuthPage(QWidget):
         form_wrap = QWidget()
         form_wrap.setObjectName("loginFormWrap")
         form_layout = QVBoxLayout(form_wrap)
-        form_layout.setContentsMargins(80, 70, 80, 70)
-        form_layout.setSpacing(20)
-        title2 = QLabel("登录系统")
-        title2.setObjectName("pageTitle")
-        desc = QLabel("输入账号密码后，系统会自动根据身份进入用户端或管理端。")
-        desc.setObjectName("mutedText")
+        form_layout.setContentsMargins(60, 50, 60, 50)
+        form_layout.setSpacing(16)
+
+        tabs = QTabWidget()
+        tabs.setObjectName("authTabs")
+
+        # --- 登录Tab ---
+        login_tab = QWidget()
+        login_form = QVBoxLayout(login_tab)
+        login_form.setContentsMargins(20, 20, 20, 20)
+        login_form.setSpacing(14)
         self.username_input = QLineEdit()
         self.username_input.setPlaceholderText("账号")
         self.password_input = QLineEdit()
@@ -740,10 +740,10 @@ class AuthPage(QWidget):
         self.password_input.returnPressed.connect(self.submit_login)
         login_btn = set_primary(QPushButton("登录"))
         login_btn.clicked.connect(self.submit_login)
-        demo_title = QLabel("演示账号")
-        demo_title.setObjectName("sectionTitle")
+        demo_title = QLabel("演示账号（点击自动填入）")
+        demo_title.setObjectName("mutedText")
         demo_row = QHBoxLayout()
-        demo_row.setSpacing(10)
+        demo_row.setSpacing(8)
         for label, username, password in [
             ("学生", "20230001", "lzu123456"),
             ("老师", "teacher01", "lzu123456"),
@@ -752,8 +752,22 @@ class AuthPage(QWidget):
             button = set_secondary(QPushButton(label))
             button.clicked.connect(lambda _checked=False, u=username, p=password: self.fill_demo(u, p))
             demo_row.addWidget(button)
-        register_title = QLabel("注册普通账号")
-        register_title.setObjectName("sectionTitle")
+        login_form.addWidget(self.username_input)
+        login_form.addWidget(self.password_input)
+        login_form.addWidget(login_btn)
+        login_form.addSpacing(8)
+        login_form.addWidget(demo_title)
+        login_form.addLayout(demo_row)
+        login_form.addStretch(1)
+
+        # --- 注册Tab ---
+        reg_tab = QWidget()
+        reg_form = QVBoxLayout(reg_tab)
+        reg_form.setContentsMargins(20, 20, 20, 20)
+        reg_form.setSpacing(12)
+        reg_desc = QLabel("注册后自动进入用户端，可发布商品、预约场馆、参与活动。")
+        reg_desc.setObjectName("mutedText")
+        reg_desc.setWordWrap(True)
         self.reg_username = QLineEdit()
         self.reg_username.setPlaceholderText("新账号")
         self.reg_name = QLineEdit()
@@ -765,26 +779,20 @@ class AuthPage(QWidget):
         self.reg_role.addItems(["student", "teacher"])
         self.reg_college = QLineEdit()
         self.reg_college.setPlaceholderText("学院 / 单位")
-        register_btn = set_secondary(QPushButton("完成注册"))
+        register_btn = set_primary(QPushButton("完成注册"))
         register_btn.clicked.connect(self.submit_register)
+        reg_form.addWidget(reg_desc)
+        reg_form.addWidget(self.reg_username)
+        reg_form.addWidget(self.reg_name)
+        reg_form.addWidget(self.reg_password)
+        reg_form.addWidget(self.reg_role)
+        reg_form.addWidget(self.reg_college)
+        reg_form.addWidget(register_btn)
+        reg_form.addStretch(1)
 
-        form_layout.addWidget(title2)
-        form_layout.addWidget(desc)
-        form_layout.addSpacing(16)
-        form_layout.addWidget(self.username_input)
-        form_layout.addWidget(self.password_input)
-        form_layout.addWidget(login_btn)
-        form_layout.addSpacing(20)
-        form_layout.addWidget(demo_title)
-        form_layout.addLayout(demo_row)
-        form_layout.addSpacing(28)
-        form_layout.addWidget(register_title)
-        form_layout.addWidget(self.reg_username)
-        form_layout.addWidget(self.reg_name)
-        form_layout.addWidget(self.reg_password)
-        form_layout.addWidget(self.reg_role)
-        form_layout.addWidget(self.reg_college)
-        form_layout.addWidget(register_btn)
+        tabs.addTab(login_tab, "登录")
+        tabs.addTab(reg_tab, "注册")
+        form_layout.addWidget(tabs)
         form_layout.addStretch(1)
 
         root.addWidget(visual, 4)
@@ -851,6 +859,25 @@ class MainWindow(QMainWindow):
     def show_toast(self, message: str, success: bool = True) -> None:
         toast = Toast(self, message, success)
         toast.show()
+
+    def _show_loading(self, text: str = "加载中...") -> QLabel:
+        overlay = QLabel(text, self)
+        overlay.setAlignment(Qt.AlignCenter)
+        overlay.setStyleSheet(
+            "background-color: rgba(255,255,255,200); color: #6B7280; font-size: 16px; font-weight: bold; border-radius: 12px;"
+        )
+        overlay.setFixedSize(200, 60)
+        overlay.move(
+            (self.width() - overlay.width()) // 2,
+            (self.height() - overlay.height()) // 2,
+        )
+        overlay.show()
+        overlay.raise_()
+        return overlay
+
+    def _hide_loading(self, overlay: QLabel | None) -> None:
+        if overlay:
+            overlay.deleteLater()
 
     def enter_after_login(self) -> None:
         user = self.model.require_user()
@@ -1404,6 +1431,7 @@ class MainWindow(QMainWindow):
             table.selectRow(0)
 
     def refresh_user_all(self) -> None:
+        overlay = self._show_loading()
         self.refresh_home()
         self.refresh_market()
         self.refresh_bookings()
@@ -1411,6 +1439,7 @@ class MainWindow(QMainWindow):
         self.refresh_activities()
         self.refresh_moments()
         self.refresh_profile()
+        self._hide_loading(overlay)
 
     def refresh_home(self) -> None:
         summary = self.model.dashboard_summary()
@@ -1418,18 +1447,18 @@ class MainWindow(QMainWindow):
             animate_number_count(self.user_kpi_labels[key], value)
         products_html = "".join(
             f'<div style="border-bottom:1px solid #E8ECF1;padding:10px 0;">'
-            f'<div><b style="color:#C9A962;font-size:15px;">🛍 {p["title"]}</b> '
+            f'<div><b style="color:#C9A962;font-size:15px;">🛍 {esc(p["title"])}</b> '
             f'<span style="color:#E74C3C;font-weight:bold;font-size:15px;">¥{p["price"]:.0f}</span></div>'
-            f'<div style="color:#6B7280;font-size:13px;margin-top:4px;">{p["seller_name"]} · {p.get("category", "")}</div>'
+            f'<div style="color:#6B7280;font-size:13px;margin-top:4px;">{esc(p["seller_name"])} · {esc(p.get("category", ""))}</div>'
             f'</div>'
             for p in summary["recent_products"]
         ) or '<div style="color:#9CA3AF;padding:20px;text-align:center;">暂无商品</div>'
         self.home_products.setHtml(products_html)
         activities_html = "".join(
             f'<div style="border-bottom:1px solid #E8ECF1;padding:10px 0;">'
-            f'<div><b style="color:#1A1A2E;font-size:15px;">🎉 {a["title"]}</b></div>'
+            f'<div><b style="color:#1A1A2E;font-size:15px;">🎉 {esc(a["title"])}</b></div>'
             f'<div style="color:#6B7280;font-size:13px;margin-top:4px;">'
-            f'🕐 {a["start_time"]} · 📍 {a["location"]} · 📁 {a.get("category", "")}</div>'
+            f'🕐 {esc(a["start_time"])} · 📍 {esc(a["location"])} · 📁 {esc(a.get("category", ""))}</div>'
             f'</div>'
             for a in summary["recent_activities"]
         ) or '<div style="color:#9CA3AF;padding:20px;text-align:center;">暂无活动</div>'
@@ -1471,18 +1500,21 @@ class MainWindow(QMainWindow):
             layout.addWidget(meta)
             layout.addStretch(1)
             layout.addWidget(btn)
-            self.market_grid.addWidget(card, index // 3, index % 3)
+            # 自适应列数：根据窗口宽度计算
+            parent_width = self.width() if self.width() > 0 else 900
+            cols = max(1, min(4, parent_width // 300))
+            self.market_grid.addWidget(card, index // cols, index % cols)
 
     def open_product_dialog(self) -> None:
         dialog = ProductDialog(self, self.model)
         if dialog.exec() != QDialog.Accepted:
             return
         ok, msg = self.model.create_product(
-            dialog.title_input.text().strip(),
-            dialog.category_input.currentText(),
-            dialog.campus_input.currentText(),
-            dialog.price_input.text().strip(),
-            dialog.desc_input.toPlainText().strip(),
+            dialog.get_value("title").strip(),
+            dialog.get_value("category"),
+            dialog.get_value("campus"),
+            dialog.get_value("price").strip(),
+            dialog.get_value("description").strip(),
             dialog.image_path,
         )
         self.show_toast(msg, ok)
@@ -1693,8 +1725,8 @@ class MainWindow(QMainWindow):
         bar_color = "#27AE60" if ratio < 0.7 else "#E74C3C" if ratio >= 0.95 else "#C9A962"
         self.activity_detail.setHtml(
             f'<div style="padding:8px 0;">'
-            f'<div style="font-size:18px; font-weight:bold; color:#1A1A2E;">🎉 {detail["title"]}</div>'
-            f'<div style="color:#6B7280; font-size:13px; margin-top:12px; line-height:1.7;">{detail["summary"]}</div>'
+            f'<div style="font-size:18px; font-weight:bold; color:#1A1A2E;">🎉 {esc(detail["title"])}</div>'
+            f'<div style="color:#6B7280; font-size:13px; margin-top:12px; line-height:1.7;">{esc(detail["summary"])}</div>'
             f'<div style="margin-top:16px; padding:12px; background:#FAFBFD; border-radius:8px;">'
             f'<div style="color:#6B7280; font-size:13px; margin-bottom:8px;">报名进度</div>'
             f'<div style="background:#E8ECF1; border-radius:6px; height:8px; overflow:hidden;">'
@@ -1763,12 +1795,12 @@ class MainWindow(QMainWindow):
         if dialog.exec() != QDialog.Accepted:
             return
         ok, msg = self.model.create_activity(
-            dialog.title_input.text().strip(),
-            dialog.category_input.currentText(),
-            dialog.location_input.text().strip(),
-            dialog.time_input.text().strip(),
-            dialog.capacity_input.text().strip(),
-            dialog.summary_input.toPlainText().strip(),
+            dialog.get_value("title").strip(),
+            dialog.get_value("category"),
+            dialog.get_value("location").strip(),
+            dialog.get_value("start_time").strip(),
+            dialog.get_value("capacity").strip(),
+            dialog.get_value("summary").strip(),
         )
         self.show_toast(msg, ok)
         if ok:
@@ -1817,8 +1849,8 @@ class MainWindow(QMainWindow):
             comments_html = "".join(
                 f'<div style="border-bottom:1px solid #E8ECF1; padding:10px 0;">'
                 f'<div style="color:#6B7280; font-size:12px;">'
-                f'<b style="color:#1A1A2E;">{c["display_name"]}</b> · {c["created_at"]}</div>'
-                f'<div style="margin-top:4px; color:#1A1A2E;">{c["content"]}</div>'
+                f'<b style="color:#1A1A2E;">{esc(c["display_name"])}</b> · {esc(c["created_at"])}</div>'
+                f'<div style="margin-top:4px; color:#1A1A2E;">{esc(c["content"])}</div>'
                 f'</div>'
                 for c in detail["comments"]
             )
@@ -1827,14 +1859,14 @@ class MainWindow(QMainWindow):
         self.moment_detail.setHtml(
             f'<div style="padding:8px 0;">'
             f'<table style="width:100%; margin-bottom:12px;"><tr>'
-            f'<td style="color:#6B7280; font-size:13px; padding-right:16px;">👤 {detail["display_name"]}</td>'
-            f'<td style="color:#6B7280; font-size:13px; padding-right:16px;">📁 {detail["category"]}</td>'
-            f'<td style="color:#6B7280; font-size:13px; padding-right:16px;">🕐 {detail["created_at"]}</td>'
+            f'<td style="color:#6B7280; font-size:13px; padding-right:16px;">👤 {esc(detail["display_name"])}</td>'
+            f'<td style="color:#6B7280; font-size:13px; padding-right:16px;">📁 {esc(detail["category"])}</td>'
+            f'<td style="color:#6B7280; font-size:13px; padding-right:16px;">🕐 {esc(detail["created_at"])}</td>'
             f'<td style="color:#6B7280; font-size:13px; padding-right:16px;">❤️ {detail["like_count"]}</td>'
             f'<td style="color:#6B7280; font-size:13px;">💬 {detail["comment_count"]}</td>'
             f'</tr></table>'
             f'<div style="color:#1A1A2E; font-size:14px; line-height:1.8; margin:16px 0; padding:12px; background:#FAFBFD; border-radius:8px;">'
-            f'{detail["content"]}</div>'
+            f'{esc(detail["content"])}</div>'
             f'<div style="border-top:2px solid #C9A962; padding-top:12px; margin-top:16px;">'
             f'<div style="font-weight:bold; color:#C9A962; margin-bottom:8px;">评论区</div>'
             f'{comments_html}</div></div>'
@@ -1881,7 +1913,7 @@ class MainWindow(QMainWindow):
         dialog = MomentDialog(self, self.model)
         if dialog.exec() != QDialog.Accepted:
             return
-        ok, msg = self.model.create_moment(dialog.category_input.currentText(), dialog.content_input.toPlainText().strip(), dialog.image_path)
+        ok, msg = self.model.create_moment(dialog.get_value("category"), dialog.get_value("content").strip(), dialog.image_path)
         self.show_toast(msg, ok)
         if ok:
             self.refresh_home()
@@ -1918,7 +1950,7 @@ class MainWindow(QMainWindow):
             f'<div style="border-bottom:1px solid #E8ECF1; padding:8px 0;">'
             f'<b style="color:#1A1A2E;">{b["name"]}</b> '
             f'<span style="color:#6B7280;">{b["slot_date"]} {b["slot_time"]}</span> '
-            f'<span style="color:{"#27AE60" if b["status"] == "normal" else "#E74C3C"}; font-weight:bold;">'
+            f'<span style="color:{"#27AE60" if b["status"] == "active" else "#E74C3C"}; font-weight:bold;">'
             f'{STATUS_LABELS.get(b["status"], b["status"])}</span></div>'
             for b in data["bookings"]
         ) or '<div style="color:#9CA3AF; padding:12px; text-align:center;">暂无预约</div>'
@@ -1932,15 +1964,15 @@ class MainWindow(QMainWindow):
             f'<div style="padding:4px 0;">'
             f'<table style="width:100%; border-collapse:collapse;">'
             f'<tr><td style="color:#6B7280; padding:6px 12px 6px 0; font-size:13px; width:100px;">姓名</td>'
-            f'<td style="font-weight:bold; padding:6px 0;">{user["display_name"]}</td></tr>'
+            f'<td style="font-weight:bold; padding:6px 0;">{esc(user["display_name"])}</td></tr>'
             f'<tr><td style="color:#6B7280; padding:6px 12px 6px 0; font-size:13px;">账号</td>'
-            f'<td style="padding:6px 0;">{user["username"]}</td></tr>'
+            f'<td style="padding:6px 0;">{esc(user["username"])}</td></tr>'
             f'<tr><td style="color:#6B7280; padding:6px 12px 6px 0; font-size:13px;">身份</td>'
-            f'<td style="padding:6px 0;">{ROLE_LABELS.get(user["role"], user["role"])}</td></tr>'
+            f'<td style="padding:6px 0;">{esc(ROLE_LABELS.get(user["role"], user["role"]))}</td></tr>'
             f'<tr><td style="color:#6B7280; padding:6px 12px 6px 0; font-size:13px;">学院</td>'
-            f'<td style="padding:6px 0;">{user["college"]}</td></tr>'
+            f'<td style="padding:6px 0;">{esc(user["college"])}</td></tr>'
             f'<tr><td style="color:#6B7280; padding:6px 12px 6px 0; font-size:13px;">注册时间</td>'
-            f'<td style="padding:6px 0;">{user["created_at"]}</td></tr>'
+            f'<td style="padding:6px 0;">{esc(user["created_at"])}</td></tr>'
             f'</table>'
             f'<table style="width:100%; margin:16px 0; padding:12px; background:#FAFBFD; border-radius:8px; border-collapse:separate; border-spacing:24px 0;"><tr>'
             f'<td style="text-align:center;"><div style="font-size:20px; font-weight:bold; color:#C9A962;">{data["product_count"]}</div>'
@@ -2005,30 +2037,34 @@ class MainWindow(QMainWindow):
             3,
         )
 
-    def admin_change_user(self, status: str) -> None:
-        user_id = self.current_admin_ids.get("user")
-        if user_id is None:
-            self.show_toast("请先选择用户", False)
+    def _admin_operation(self, entity_type: str, action_title: str, detail_text: str,
+                         model_call, refresh_call, prompt: str = "填写处理依据") -> None:
+        """通用管理操作：获取ID → 弹ReasonDialog → 调model → 刷新"""
+        entity_id = self.current_admin_ids.get(entity_type)
+        if entity_id is None:
+            self.show_toast(f"请先选择{entity_type}", False)
             return
-        row = next((item for item in self.admin_user_rows if item["id"] == user_id), None)
-        action = "解封用户" if status == "active" else "封禁用户"
         reason = ""
-        if row is not None:
-            dialog = ReasonDialog(
-                self,
-                action,
-                f"账号：{row['username']}\n姓名：{row['display_name']}\n身份：{ROLE_LABELS.get(row['role'], row['role'])}\n当前状态：{STATUS_LABELS.get(row['status'], row['status'])}",
-                "填写处理依据，例如违规发布、误封恢复等",
-            )
+        if detail_text:
+            dialog = ReasonDialog(self, action_title, detail_text, prompt)
             if dialog.exec() != QDialog.Accepted:
                 return
             reason = dialog.reason()
-        ok, msg = self.model.admin_set_user_status(user_id, status, reason)
+        ok, msg = model_call(entity_id, reason)
         self.show_toast(msg, ok)
         if ok:
-            self.refresh_admin_users()
+            refresh_call()
             self.refresh_admin_overview()
             self.refresh_admin_logs()
+
+    def admin_change_user(self, status: str) -> None:
+        user_id = self.current_admin_ids.get("user")
+        row = next((item for item in self.admin_user_rows if item["id"] == user_id), None) if user_id else None
+        action = "解封用户" if status == "active" else "封禁用户"
+        detail = f"账号：{row['username']}\n姓名：{row['display_name']}\n身份：{ROLE_LABELS.get(row['role'], row['role'])}\n当前状态：{STATUS_LABELS.get(row['status'], row['status'])}" if row else ""
+        self._admin_operation("user", action, detail,
+                              lambda eid, r: self.model.admin_set_user_status(eid, status, r),
+                              self.refresh_admin_users)
 
     def refresh_admin_products(self) -> None:
         self.admin_product_rows = self.model.admin_products()
@@ -2040,28 +2076,12 @@ class MainWindow(QMainWindow):
 
     def admin_change_product(self, status: str) -> None:
         product_id = self.current_admin_ids.get("product")
-        if product_id is None:
-            self.show_toast("请先选择商品", False)
-            return
-        row = next((item for item in self.admin_product_rows if item["id"] == product_id), None)
+        row = next((item for item in self.admin_product_rows if item["id"] == product_id), None) if product_id else None
         action = "恢复商品" if status == "normal" else "下架商品"
-        reason = ""
-        if row is not None:
-            dialog = ReasonDialog(
-                self,
-                action,
-                f"商品：{row['title']}\n分类：{row['category']}\n发布人：{row['seller_name']}\n当前状态：{STATUS_LABELS.get(row['status'], row['status'])}",
-                "填写处理原因，例如信息违规、交易完成、误操作恢复等",
-            )
-            if dialog.exec() != QDialog.Accepted:
-                return
-            reason = dialog.reason()
-        ok, msg = self.model.admin_set_product_status(product_id, status, reason)
-        self.show_toast(msg, ok)
-        if ok:
-            self.refresh_admin_products()
-            self.refresh_admin_overview()
-            self.refresh_admin_logs()
+        detail = f"商品：{row['title']}\n分类：{row['category']}\n发布人：{row['seller_name']}\n当前状态：{STATUS_LABELS.get(row['status'], row['status'])}" if row else ""
+        self._admin_operation("product", action, detail,
+                              lambda eid, r: self.model.admin_set_product_status(eid, status, r),
+                              self.refresh_admin_products)
 
     def admin_show_product_detail(self) -> None:
         product_id = self.current_admin_ids.get("product")
@@ -2101,27 +2121,11 @@ class MainWindow(QMainWindow):
 
     def admin_cancel_booking(self) -> None:
         booking_id = self.current_admin_ids.get("booking")
-        if booking_id is None:
-            self.show_toast("请先选择预约", False)
-            return
-        row = next((item for item in self.admin_booking_rows if item["id"] == booking_id), None)
-        reason = ""
-        if row is not None:
-            dialog = ReasonDialog(
-                self,
-                "强制取消预约",
-                f"用户：{row['display_name']}（{row['username']}）\n场馆：{row['name']}\n日期：{row['slot_date']} {row['slot_time']}\n当前状态：{STATUS_LABELS.get(row['status'], row['status'])}",
-                "填写后台取消原因，例如场馆维护、异常占用、重复预约等",
-            )
-            if dialog.exec() != QDialog.Accepted:
-                return
-            reason = dialog.reason()
-        ok, msg = self.model.admin_cancel_booking(booking_id, reason)
-        self.show_toast(msg, ok)
-        if ok:
-            self.refresh_admin_bookings()
-            self.refresh_admin_overview()
-            self.refresh_admin_logs()
+        row = next((item for item in self.admin_booking_rows if item["id"] == booking_id), None) if booking_id else None
+        detail = f"用户：{row['display_name']}（{row['username']}）\n场馆：{row['name']}\n日期：{row['slot_date']} {row['slot_time']}\n当前状态：{STATUS_LABELS.get(row['status'], row['status'])}" if row else ""
+        self._admin_operation("booking", "强制取消预约", detail,
+                              self.model.admin_cancel_booking,
+                              self.refresh_admin_bookings)
 
     def refresh_admin_activities(self) -> None:
         self.admin_activity_rows = self.model.admin_activities()
@@ -2133,27 +2137,11 @@ class MainWindow(QMainWindow):
 
     def admin_cancel_activity(self) -> None:
         activity_id = self.current_admin_ids.get("activity")
-        if activity_id is None:
-            self.show_toast("请先选择活动", False)
-            return
-        row = next((item for item in self.admin_activity_rows if item["id"] == activity_id), None)
-        reason = ""
-        if row is not None:
-            dialog = ReasonDialog(
-                self,
-                "取消活动",
-                f"活动：{row['title']}\n组织者：{row['organizer_name']}\n时间：{row['start_time']}\n报名数：{row['registered_count']}\n当前状态：{STATUS_LABELS.get(row['status'], row['status'])}",
-                "填写取消原因，例如时间调整、人数不足、场地冲突等",
-            )
-            if dialog.exec() != QDialog.Accepted:
-                return
-            reason = dialog.reason()
-        ok, msg = self.model.admin_cancel_activity(activity_id, reason)
-        self.show_toast(msg, ok)
-        if ok:
-            self.refresh_admin_activities()
-            self.refresh_admin_overview()
-            self.refresh_admin_logs()
+        row = next((item for item in self.admin_activity_rows if item["id"] == activity_id), None) if activity_id else None
+        detail = f"活动：{row['title']}\n组织者：{row['organizer_name']}\n时间：{row['start_time']}\n报名数：{row['registered_count']}\n当前状态：{STATUS_LABELS.get(row['status'], row['status'])}" if row else ""
+        self._admin_operation("activity", "取消活动", detail,
+                              self.model.admin_cancel_activity,
+                              self.refresh_admin_activities)
 
     def admin_show_activity_detail(self) -> None:
         activity_id = self.current_admin_ids.get("activity")
@@ -2206,28 +2194,12 @@ class MainWindow(QMainWindow):
 
     def admin_change_moment(self, status: str) -> None:
         moment_id = self.current_admin_ids.get("moment")
-        if moment_id is None:
-            self.show_toast("请先选择动态", False)
-            return
-        row = next((item for item in self.admin_moment_rows if item["id"] == moment_id), None)
+        row = next((item for item in self.admin_moment_rows if item["id"] == moment_id), None) if moment_id else None
         action = "恢复动态" if status == "normal" else "删除动态"
-        reason = ""
-        if row is not None:
-            dialog = ReasonDialog(
-                self,
-                action,
-                f"分类：{row['category']}\n发布人：{row['display_name']}\n内容：{row['content'][:120]}\n当前状态：{STATUS_LABELS.get(row['status'], row['status'])}",
-                "填写审核原因，例如广告、敏感内容、误删恢复等",
-            )
-            if dialog.exec() != QDialog.Accepted:
-                return
-            reason = dialog.reason()
-        ok, msg = self.model.admin_set_moment_status(moment_id, status, reason)
-        self.show_toast(msg, ok)
-        if ok:
-            self.refresh_admin_moments()
-            self.refresh_admin_overview()
-            self.refresh_admin_logs()
+        detail = f"分类：{row['category']}\n发布人：{row['display_name']}\n内容：{row['content'][:120]}\n当前状态：{STATUS_LABELS.get(row['status'], row['status'])}" if row else ""
+        self._admin_operation("moment", action, detail,
+                              lambda eid, r: self.model.admin_set_moment_status(eid, status, r),
+                              self.refresh_admin_moments)
 
     def admin_show_moment_detail(self) -> None:
         moment_id = self.current_admin_ids.get("moment")

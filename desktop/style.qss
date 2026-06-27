@@ -258,6 +258,37 @@ QWidget#loginFormWrap {
     border-left: 1px solid #E8ECF1;
 }
 
+QTabWidget#authTabs {
+    background: transparent;
+    border: none;
+}
+
+QTabWidget#authTabs QTabBar {
+    background: transparent;
+    border: none;
+}
+
+QTabWidget#authTabs QTabBar::tab {
+    background: #E8ECF1;
+    color: #6B7280;
+    padding: 12px 32px;
+    border: none;
+    border-bottom: 3px solid transparent;
+    font-weight: bold;
+    font-size: 14px;
+}
+
+QTabWidget#authTabs QTabBar::tab:selected {
+    background: #FFFFFF;
+    color: #C9A962;
+    border-bottom: 3px solid #C9A962;
+}
+
+QTabWidget#authTabs QTabBar::tab:hover:!selected {
+    background: #D1D9E6;
+    color: #1A1A2E;
+}
+
 /* ========================================
    导航栏 - 深色奢华
    ======================================== */

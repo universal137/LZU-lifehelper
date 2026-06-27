@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 import hashlib
+import os
 import shutil
 import sqlite3
 from pathlib import Path
@@ -22,7 +23,24 @@ DATA_DIR = APP_ROOT / "data"
 IMAGE_DIR = DATA_DIR / "images"
 EXPORT_DIR = DATA_DIR / "exports"
 DB_PATH = DATA_DIR / "lzu_lifehelper.db"
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
+
+# 增量迁移：{目标版本: [SQL语句列表]}
+MIGRATIONS: dict[int, list[str]] = {
+    3: [
+        "CREATE INDEX IF NOT EXISTS idx_products_status_category ON products(status, category)",
+        "CREATE INDEX IF NOT EXISTS idx_products_seller ON products(seller_id)",
+        "CREATE INDEX IF NOT EXISTS idx_bookings_user_status ON bookings(user_id, status)",
+        "CREATE INDEX IF NOT EXISTS idx_bookings_slot ON bookings(slot_id, status)",
+        "CREATE INDEX IF NOT EXISTS idx_shuttle_tickets_route_date ON shuttle_tickets(route_id, ride_date)",
+        "CREATE INDEX IF NOT EXISTS idx_shuttle_tickets_user ON shuttle_tickets(user_id, status)",
+        "CREATE INDEX IF NOT EXISTS idx_activities_status ON activities(status)",
+        "CREATE INDEX IF NOT EXISTS idx_activity_registrations_user ON activity_registrations(user_id, status)",
+        "CREATE INDEX IF NOT EXISTS idx_moments_category_status ON moments(category, status)",
+        "CREATE INDEX IF NOT EXISTS idx_moment_comments_moment ON moment_comments(moment_id)",
+        "CREATE INDEX IF NOT EXISTS idx_moment_likes_moment ON moment_likes(moment_id)",
+    ],
+}
 
 
 def now_text() -> str:
@@ -33,8 +51,23 @@ def today_text() -> str:
     return date.today().isoformat()
 
 
-def hash_password(password: str) -> str:
-    return hashlib.sha256(password.encode("utf-8")).hexdigest()
+def hash_password(password: str, salt: bytes | None = None) -> str:
+    if salt is None:
+        salt = os.urandom(16)
+    elif isinstance(salt, str):
+        salt = bytes.fromhex(salt)
+    dk = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt, 100000)
+    return f"{salt.hex()}:{dk.hex()}"
+
+
+def verify_password(password: str, stored: str) -> bool:
+    try:
+        salt_hex, hash_hex = stored.split(":", 1)
+        salt = bytes.fromhex(salt_hex)
+        dk = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt, 100000)
+        return dk.hex() == hash_hex
+    except (ValueError, AttributeError):
+        return False
 
 
 def avatar_color(name: str) -> str:
@@ -71,13 +104,24 @@ class AppModel:
     def initialize(self) -> None:
         with self.connect() as conn:
             version = conn.execute("PRAGMA user_version").fetchone()[0]
-        if version != SCHEMA_VERSION:
+        if version == 0:
+            # 全新数据库，创建表和索引
             self.reset_database()
             return
+        if version < SCHEMA_VERSION:
+            # 增量迁移
+            self._run_migrations(version)
         with self.connect() as conn:
             count = conn.execute("SELECT COUNT(*) FROM users").fetchone()[0]
             if count == 0:
                 self._seed_data(conn)
+
+    def _run_migrations(self, current_version: int) -> None:
+        with self.connect() as conn:
+            for target_ver in sorted(v for v in MIGRATIONS if v > current_version):
+                for sql in MIGRATIONS[target_ver]:
+                    conn.execute(sql)
+                conn.execute(f"PRAGMA user_version = {target_ver}")
 
     def reset_database(self) -> None:
         if self.db_path.exists():
@@ -255,6 +299,24 @@ class AppModel:
             );
             """
         )
+        self._create_indexes(conn)
+
+    def _create_indexes(self, conn: sqlite3.Connection) -> None:
+        indexes = [
+            "CREATE INDEX IF NOT EXISTS idx_products_status_category ON products(status, category)",
+            "CREATE INDEX IF NOT EXISTS idx_products_seller ON products(seller_id)",
+            "CREATE INDEX IF NOT EXISTS idx_bookings_user_status ON bookings(user_id, status)",
+            "CREATE INDEX IF NOT EXISTS idx_bookings_slot ON bookings(slot_id, status)",
+            "CREATE INDEX IF NOT EXISTS idx_shuttle_tickets_route_date ON shuttle_tickets(route_id, ride_date)",
+            "CREATE INDEX IF NOT EXISTS idx_shuttle_tickets_user ON shuttle_tickets(user_id, status)",
+            "CREATE INDEX IF NOT EXISTS idx_activities_status ON activities(status)",
+            "CREATE INDEX IF NOT EXISTS idx_activity_registrations_user ON activity_registrations(user_id, status)",
+            "CREATE INDEX IF NOT EXISTS idx_moments_category_status ON moments(category, status)",
+            "CREATE INDEX IF NOT EXISTS idx_moment_comments_moment ON moment_comments(moment_id)",
+            "CREATE INDEX IF NOT EXISTS idx_moment_likes_moment ON moment_likes(moment_id)",
+        ]
+        for sql in indexes:
+            conn.execute(sql)
 
     def _seed_data(self, conn: sqlite3.Connection) -> None:
         users = [
@@ -440,8 +502,19 @@ class AppModel:
                 "SELECT * FROM users WHERE username = ?",
                 (username,),
             ).fetchone()
-        if row is None or row["password_hash"] != hash_password(password):
+        if row is None:
             return False, "账号或密码错误"
+        stored = row["password_hash"]
+        # 兼容旧格式（纯SHA-256）：验证后自动升级为PBKDF2
+        if ":" not in stored:
+            if stored != hashlib.sha256(password.encode("utf-8")).hexdigest():
+                return False, "账号或密码错误"
+            new_hash = hash_password(password)
+            with self.connect() as conn:
+                conn.execute("UPDATE users SET password_hash = ? WHERE id = ?", (new_hash, row["id"]))
+        else:
+            if not verify_password(password, stored):
+                return False, "账号或密码错误"
         if row["status"] == "banned":
             return False, "该账号已被管理员封禁，无法登录"
         self.current_user = SessionUser(
@@ -509,13 +582,37 @@ class AppModel:
             "recent_activities": [dict(row) for row in recent_activities],
         }
 
+    # 图片文件魔数签名
+    _IMAGE_SIGNATURES = {
+        b"\x89PNG\r\n\x1a\n": ".png",
+        b"\xff\xd8\xff": ".jpg",
+        b"GIF87a": ".gif",
+        b"GIF89a": ".gif",
+        b"RIFF": ".webp",  # WEBP 文件头是 RIFF....WEBP
+    }
+    _MAX_IMAGE_SIZE = 5 * 1024 * 1024  # 5MB
+
     def copy_image(self, image_source_path: str | None) -> str:
         if not image_source_path:
             return ""
         source = Path(image_source_path)
         if not source.exists():
             return ""
-        suffix = source.suffix.lower() or ".png"
+        # 大小校验
+        if source.stat().st_size > self._MAX_IMAGE_SIZE:
+            return ""
+        # 读取文件头校验魔数
+        with open(source, "rb") as f:
+            header = f.read(16)
+        valid_ext = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp"}
+        suffix = source.suffix.lower()
+        if suffix not in valid_ext:
+            return ""
+        # 魔数校验（如果能匹配到则用实际类型）
+        for sig, real_ext in self._IMAGE_SIGNATURES.items():
+            if header.startswith(sig):
+                suffix = real_ext
+                break
         target = IMAGE_DIR / f"{uuid4().hex}{suffix}"
         shutil.copy2(source, target)
         return str(target.relative_to(APP_ROOT)).replace("\\", "/")
@@ -552,10 +649,16 @@ class AppModel:
         user = self.require_user()
         if not title or not description:
             return False, "商品标题和描述不能为空"
+        if len(title) > 50:
+            return False, "商品标题不能超过50个字符"
+        if len(description) > 2000:
+            return False, "商品描述不能超过2000个字符"
         try:
             price_value = float(price)
         except ValueError:
             return False, "价格必须是数字"
+        if price_value <= 0:
+            return False, "价格必须大于0"
         with self.connect() as conn:
             conn.execute(
                 """
@@ -741,21 +844,28 @@ class AppModel:
     def create_shuttle_ticket(self, route_id: int) -> tuple[bool, str]:
         user = self.require_user()
         with self.connect() as conn:
+            conn.execute("BEGIN IMMEDIATE")
             exists = conn.execute(
                 "SELECT 1 FROM shuttle_tickets WHERE route_id = ? AND user_id = ? AND ride_date = ? AND status = 'active'",
                 (route_id, user.id, today_text()),
             ).fetchone()
             if exists:
+                conn.execute("ROLLBACK")
                 return False, "该班次今天已订过"
-            route = next((item for item in self.list_shuttle_routes("全部") if item["id"] == route_id), None)
+            route = conn.execute(
+                "SELECT id, seats_left FROM shuttle_routes WHERE id = ?", (route_id,)
+            ).fetchone()
             if route is None:
+                conn.execute("ROLLBACK")
                 return False, "班次不存在"
             if route["seats_left"] <= 0:
+                conn.execute("ROLLBACK")
                 return False, "当前班次余座不足"
             conn.execute(
                 "INSERT INTO shuttle_tickets (route_id, user_id, ride_date, status, created_at) VALUES (?, ?, ?, 'active', ?)",
                 (route_id, user.id, today_text(), now_text()),
             )
+            conn.execute("COMMIT")
         return True, "校车票预订成功"
 
     def list_my_tickets(self) -> list[dict[str, Any]]:
@@ -815,6 +925,17 @@ class AppModel:
             return False, "只有老师或管理员可以发布活动"
         if not title or not location or not start_time:
             return False, "活动标题、地点和时间不能为空"
+        if len(title) > 50:
+            return False, "活动标题不能超过50个字符"
+        if len(location) > 100:
+            return False, "地点不能超过100个字符"
+        if len(summary) > 2000:
+            return False, "活动简介不能超过2000个字符"
+        from datetime import datetime
+        try:
+            datetime.strptime(start_time.strip(), "%Y-%m-%d %H:%M")
+        except ValueError:
+            return False, "时间格式不正确，请使用 YYYY-MM-DD HH:MM 格式"
         try:
             capacity_value = int(capacity)
         except ValueError:
@@ -906,14 +1027,16 @@ class AppModel:
             conn.close()
 
     def export_activity_csv(self, activity_id: int) -> Path | None:
+        import csv
         detail = self.get_activity(activity_id)
         if detail is None:
             return None
-        lines = ["姓名,学院,活动名称,活动时间,地点"]
-        for member in detail["members"]:
-            lines.append(f"{member['display_name']},{member['college']},{detail['title']},{detail['start_time']},{detail['location']}")
         target = EXPORT_DIR / f"activity_{activity_id}_registrations.csv"
-        target.write_text("\n".join(lines), encoding="utf-8-sig")
+        with open(target, "w", newline="", encoding="utf-8-sig") as f:
+            writer = csv.writer(f)
+            writer.writerow(["姓名", "学院", "活动名称", "活动时间", "地点"])
+            for member in detail["members"]:
+                writer.writerow([member["display_name"], member["college"], detail["title"], detail["start_time"], detail["location"]])
         return target
 
     def moment_categories(self) -> list[str]:
@@ -984,6 +1107,8 @@ class AppModel:
         user = self.require_user()
         if not content.strip():
             return False, "动态内容不能为空"
+        if len(content) > 2000:
+            return False, "动态内容不能超过2000个字符"
         with self.connect() as conn:
             conn.execute(
                 "INSERT INTO moments (user_id, category, content, image_path, status, created_at) VALUES (?, ?, ?, ?, 'normal', ?)",
@@ -1005,6 +1130,8 @@ class AppModel:
         user = self.require_user()
         if not content.strip():
             return False, "评论不能为空"
+        if len(content) > 500:
+            return False, "评论不能超过500个字符"
         with self.connect() as conn:
             exists = conn.execute("SELECT 1 FROM moments WHERE id = ? AND status = 'normal'", (moment_id,)).fetchone()
             if not exists:
@@ -1038,8 +1165,16 @@ class AppModel:
             return False, "新密码至少 8 位"
         with self.connect() as conn:
             row = conn.execute("SELECT password_hash FROM users WHERE id = ?", (user.id,)).fetchone()
-            if row is None or row["password_hash"] != hash_password(old_password):
+            if row is None:
                 return False, "原密码错误"
+            stored = row["password_hash"]
+            # 兼容旧格式
+            if ":" not in stored:
+                if stored != hashlib.sha256(old_password.encode("utf-8")).hexdigest():
+                    return False, "原密码错误"
+            else:
+                if not verify_password(old_password, stored):
+                    return False, "原密码错误"
             conn.execute("UPDATE users SET password_hash = ? WHERE id = ?", (hash_password(new_password), user.id))
         return True, "密码修改成功"
 
