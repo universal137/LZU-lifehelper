@@ -1200,6 +1200,8 @@ class AppModel:
                 ).fetchone()[0],
                 "products": conn.execute("SELECT COUNT(*) FROM products WHERE status = 'normal'").fetchone()[0],
                 "moments": conn.execute("SELECT COUNT(*) FROM moments WHERE status = 'normal'").fetchone()[0],
+                "activities": conn.execute("SELECT COUNT(*) FROM activities WHERE status = 'normal'").fetchone()[0],
+                "total_bookings": conn.execute("SELECT COUNT(*) FROM bookings WHERE status = 'active'").fetchone()[0],
             }
             venue_hot = conn.execute(
                 """

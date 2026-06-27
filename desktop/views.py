@@ -1252,10 +1252,11 @@ class MainWindow(QMainWindow):
 
     def _build_admin_overview(self) -> QWidget:
         page, layout = self._content_page("数据总览", "系统后台核心指标与场馆预约热度。")
+        # 第一行KPI
         cards = QHBoxLayout()
         self.admin_kpi_labels: dict[str, QLabel] = {}
-        admin_kpi_colors = {"users": "teal", "today_bookings": "orange", "products": "blue", "moments": "purple"}
-        for key, title in [("users", "👥 用户总数"), ("today_bookings", "📅 今日预约"), ("products", "📦 在售商品"), ("moments", "📝 动态数量")]:
+        admin_kpi_colors = {"users": "teal", "today_bookings": "orange", "products": "blue", "moments": "purple", "activities": "green", "total_bookings": "red"}
+        for key, title in [("users", "👥 用户总数"), ("today_bookings", "📅 今日预约"), ("products", "📦 在售商品"), ("moments", "📝 动态数量"), ("activities", "🎉 活动总数"), ("total_bookings", "📋 总预约数")]:
             card = card_frame()
             card.setProperty("kpiColor", admin_kpi_colors.get(key, "blue"))
             c = QVBoxLayout(card)
@@ -1268,6 +1269,9 @@ class MainWindow(QMainWindow):
             cards.addWidget(card)
             self.admin_kpi_labels[key] = v
         layout.addLayout(cards)
+        # 图表 + 最近操作（左右布局）
+        bottom = QHBoxLayout()
+        bottom.setSpacing(16)
         chart_card = card_frame()
         chart_layout = QVBoxLayout(chart_card)
         title = QLabel("近一周场馆预约热度")
@@ -1275,10 +1279,11 @@ class MainWindow(QMainWindow):
         self.admin_chart = BarChart()
         chart_layout.addWidget(title)
         chart_layout.addWidget(self.admin_chart)
-        layout.addWidget(chart_card, 1)
+        bottom.addWidget(chart_card, 1)
         self.admin_recent_logs = QTextEdit()
         self.admin_recent_logs.setReadOnly(True)
-        layout.addWidget(self._text_card("最近管理操作", self.admin_recent_logs), 1)
+        bottom.addWidget(self._text_card("最近管理操作", self.admin_recent_logs), 1)
+        layout.addLayout(bottom, 1)
         return page
 
     def _build_admin_users(self) -> QWidget:
@@ -1577,8 +1582,18 @@ class MainWindow(QMainWindow):
             ("单位", detail["seller_college"]),
         ])
         dialog.add_section("商品描述", detail["description"], 80)
-        history = "\n".join(f"[{m['created_at']}] {m['display_name']}: {m['content']}" for m in detail["messages"]) or "暂无留言"
-        dialog.add_section("留言记录", history, 110)
+        if detail["messages"]:
+            messages_html = "".join(
+                f'<div style="border-bottom:1px solid #E8ECF1; padding:8px 0;">'
+                f'<b style="color:#C9A962;">{esc(m["display_name"])}</b> '
+                f'<span style="color:#9CA3AF; font-size:12px;">{esc(m["created_at"])}</span>'
+                f'<div style="color:#1A1A2E; margin-top:4px;">{esc(m["content"])}</div></div>'
+                for m in detail["messages"]
+            )
+            box = dialog.add_section("留言记录", "", 110)
+            box.setHtml(messages_html)
+        else:
+            dialog.add_section("留言记录", "暂无留言", 60)
 
         def leave_message() -> None:
             message_dialog = CommentDialog(dialog, "商品留言", "给卖家留一句话")
@@ -1764,14 +1779,21 @@ class MainWindow(QMainWindow):
         self.activity_detail.setHtml(
             f'<div style="padding:8px 0;">'
             f'<div style="font-size:18px; font-weight:bold; color:#1A1A2E;">🎉 {esc(detail["title"])}</div>'
+            f'<table style="width:100%; margin-top:8px;"><tr>'
+            f'<td style="color:#6B7280; font-size:12px; padding-right:16px;">📁 {esc(detail["category"])}</td>'
+            f'<td style="color:#6B7280; font-size:12px; padding-right:16px;">👤 {esc(detail["organizer_name"])}</td>'
+            f'<td style="color:#6B7280; font-size:12px; padding-right:16px;">🕐 {esc(detail["start_time"])}</td>'
+            f'<td style="color:#6B7280; font-size:12px;">📍 {esc(detail["location"])}</td>'
+            f'</tr></table>'
             f'<div style="color:#6B7280; font-size:13px; margin-top:12px; line-height:1.7;">{esc(detail["summary"])}</div>'
             f'<div style="margin-top:16px; padding:12px; background:#FAFBFD; border-radius:8px;">'
             f'<div style="color:#6B7280; font-size:13px; margin-bottom:8px;">报名进度</div>'
-            f'<div style="background:#E8ECF1; border-radius:6px; height:8px; overflow:hidden;">'
+            f'<div style="background:#E8ECF1; border-radius:6px; height:10px; overflow:hidden;">'
             f'<div style="background:{bar_color}; width:{min(ratio * 100, 100):.0f}%; height:100%; border-radius:6px;"></div>'
             f'</div>'
             f'<div style="color:#1A1A2E; font-weight:bold; margin-top:6px; font-size:14px;">'
-            f'{detail["registered_count"]} / {detail["capacity"]} 人已报名</div>'
+            f'{detail["registered_count"]} / {detail["capacity"]} 人已报名'
+            f' <span style="color:{bar_color}; font-size:12px;">({ratio * 100:.0f}%)</span></div>'
             f'</div></div>'
         )
 
@@ -2006,18 +2028,20 @@ class MainWindow(QMainWindow):
         user = data["user"]
         bookings_html = "".join(
             f'<div style="border-bottom:1px solid #E8ECF1; padding:8px 0;">'
-            f'<b style="color:#1A1A2E;">{b["name"]}</b> '
-            f'<span style="color:#6B7280;">{b["slot_date"]} {b["slot_time"]}</span> '
+            f'<b style="color:#1A1A2E;">{esc(b["name"])}</b> '
+            f'<span style="color:#6B7280;">{esc(b["slot_date"])} {esc(b["slot_time"])}</span> '
             f'<span style="color:{"#27AE60" if b["status"] == "active" else "#E74C3C"}; font-weight:bold;">'
             f'{STATUS_LABELS.get(b["status"], b["status"])}</span></div>'
             for b in data["bookings"]
-        ) or '<div style="color:#9CA3AF; padding:12px; text-align:center;">暂无预约</div>'
+        ) or '<div style="color:#9CA3AF; padding:12px; text-align:center;">📭 暂无预约</div>'
         tickets_html = "".join(
             f'<div style="border-bottom:1px solid #E8ECF1; padding:8px 0;">'
-            f'<b style="color:#1A1A2E;">{t["route_name"]}</b> '
-            f'<span style="color:#6B7280;">{t["ride_date"]} {t["departure_time"]}</span></div>'
+            f'<b style="color:#1A1A2E;">{esc(t["route_name"])}</b> '
+            f'<span style="color:#6B7280;">{esc(t["ride_date"])} {esc(t["departure_time"])}</span></div>'
             for t in data["tickets"]
-        ) or '<div style="color:#9CA3AF; padding:12px; text-align:center;">暂无车票</div>'
+        ) or '<div style="color:#9CA3AF; padding:12px; text-align:center;">📭 暂无车票</div>'
+        active_bookings = sum(1 for b in data["bookings"] if b["status"] == "active")
+        active_tickets = sum(1 for t in data["tickets"] if t.get("status") == "active")
         self.profile_text.setHtml(
             f'<div style="padding:4px 0;">'
             f'<table style="width:100%; border-collapse:collapse;">'
@@ -2032,14 +2056,18 @@ class MainWindow(QMainWindow):
             f'<tr><td style="color:#6B7280; padding:6px 12px 6px 0; font-size:13px;">注册时间</td>'
             f'<td style="padding:6px 0;">{esc(user["created_at"])}</td></tr>'
             f'</table>'
-            f'<table style="width:100%; margin:16px 0; padding:12px; background:#FAFBFD; border-radius:8px; border-collapse:separate; border-spacing:24px 0;"><tr>'
+            f'<table style="width:100%; margin:16px 0; background:#FAFBFD; border-radius:8px; border-collapse:separate; border-spacing:16px 0;"><tr>'
             f'<td style="text-align:center;"><div style="font-size:20px; font-weight:bold; color:#C9A962;">{data["product_count"]}</div>'
             f'<div style="color:#6B7280; font-size:12px;">在售商品</div></td>'
             f'<td style="text-align:center;"><div style="font-size:20px; font-weight:bold; color:#C9A962;">{data["moment_count"]}</div>'
-            f'<div style="color:#6B7280; font-size:12px;">生活圈动态</div></td></tr></table>'
-            f'<div style="margin-top:16px;"><div style="font-weight:bold; color:#C9A962; margin-bottom:8px;">预约记录</div>'
+            f'<div style="color:#6B7280; font-size:12px;">生活圈动态</div></td>'
+            f'<td style="text-align:center;"><div style="font-size:20px; font-weight:bold; color:#27AE60;">{active_bookings}</div>'
+            f'<div style="color:#6B7280; font-size:12px;">有效预约</div></td>'
+            f'<td style="text-align:center;"><div style="font-size:20px; font-weight:bold; color:#3B82F6;">{active_tickets}</div>'
+            f'<div style="color:#6B7280; font-size:12px;">有效车票</div></td></tr></table>'
+            f'<div style="margin-top:16px;"><div style="font-weight:bold; color:#C9A962; margin-bottom:8px;">🏸 预约记录</div>'
             f'{bookings_html}</div>'
-            f'<div style="margin-top:16px;"><div style="font-weight:bold; color:#C9A962; margin-bottom:8px;">车票记录</div>'
+            f'<div style="margin-top:16px;"><div style="font-weight:bold; color:#C9A962; margin-bottom:8px;">🚌 车票记录</div>'
             f'{tickets_html}</div></div>'
         )
 
