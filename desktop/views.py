@@ -72,6 +72,11 @@ def set_secondary(button: QPushButton) -> QPushButton:
 
 def animate_number_count(label: QLabel, target: int, duration: int = 500) -> None:
     from PySide6.QtCore import QVariantAnimation
+    # 停止旧动画
+    if hasattr(label, "_num_anim") and label._num_anim is not None:
+        label._num_anim.stop()
+    if hasattr(label, "_flash_timer") and label._flash_timer is not None:
+        label._flash_timer.stop()
     anim = QVariantAnimation()
     anim.setDuration(duration)
     anim.setStartValue(0)
@@ -281,12 +286,13 @@ class Toast(QFrame):
         parent = self.parentWidget()
         if not parent:
             return
+        from PySide6.QtCore import QPoint
         for i, toast in enumerate(Toast._active_toasts):
             target_y = 24 + i * (toast.height() + 10)
             anim = QPropertyAnimation(toast, b"pos")
             anim.setDuration(200)
             anim.setStartValue(toast.pos())
-            anim.setEndValue(QRectF(parent.width() - toast.width() - 24, target_y, 0, 0).toRect())
+            anim.setEndValue(QPoint(parent.width() - toast.width() - 24, target_y))
             anim.setEasingCurve(QEasingCurve.OutCubic)
             anim.start()
             toast._reposition_anim = anim
@@ -349,7 +355,13 @@ class BarChart(QWidget):
             painter.drawText(rect, Qt.AlignCenter, "暂无统计数据")
             painter.end()
             return
-        max_value = max([row["total"] for row in self.rows] + [1])
+        raw_max = max(row["total"] for row in self.rows)
+        if raw_max == 0:
+            painter.setPen(QColor("#6C757D"))
+            painter.drawText(rect, Qt.AlignCenter, "暂无统计数据")
+            painter.end()
+            return
+        max_value = raw_max
         # 水平参考线（虚线）
         grid_pen = QPen(QColor("#E8ECF1"), 1, Qt.DashLine)
         painter.setPen(grid_pen)
@@ -1062,17 +1074,27 @@ class MainWindow(QMainWindow):
             overlay.deleteLater()
 
     def enter_after_login(self) -> None:
-        user = self.model.require_user()
-        if user.role == "admin":
-            self.admin_page = self._build_admin_shell()
-            self.root_stack.addWidget(self.admin_page)
-            self.root_stack.setCurrentWidget(self.admin_page)
-            self.refresh_admin_all()
-        else:
-            self.user_page = self._build_user_shell()
-            self.root_stack.addWidget(self.user_page)
-            self.root_stack.setCurrentWidget(self.user_page)
-            self.refresh_user_all()
+        try:
+            user = self.model.require_user()
+            if user.role == "admin":
+                if hasattr(self, "admin_page") and self.admin_page is not None:
+                    self.root_stack.setCurrentWidget(self.admin_page)
+                else:
+                    self.admin_page = self._build_admin_shell()
+                    self.root_stack.addWidget(self.admin_page)
+                    self.root_stack.setCurrentWidget(self.admin_page)
+                self.refresh_admin_all()
+            else:
+                if hasattr(self, "user_page") and self.user_page is not None:
+                    self.root_stack.setCurrentWidget(self.user_page)
+                else:
+                    self.user_page = self._build_user_shell()
+                    self.root_stack.addWidget(self.user_page)
+                    self.root_stack.setCurrentWidget(self.user_page)
+                self.refresh_user_all()
+        except Exception as e:
+            logger.error("进入系统失败: %s", e)
+            self.show_toast(f"进入系统失败: {e}", False)
 
     def logout(self) -> None:
         self.model.logout()
@@ -1814,12 +1836,20 @@ class MainWindow(QMainWindow):
 
     def refresh_user_all(self) -> None:
         overlay = self._show_loading()
+        from PySide6.QtWidgets import QApplication
+        QApplication.processEvents()
         self.refresh_home()
+        QApplication.processEvents()
         self.refresh_market()
+        QApplication.processEvents()
         self.refresh_bookings()
+        QApplication.processEvents()
         self.refresh_buses()
+        QApplication.processEvents()
         self.refresh_activities()
+        QApplication.processEvents()
         self.refresh_moments()
+        QApplication.processEvents()
         self.refresh_profile()
         self._update_nav_badges()
         self._hide_loading(overlay)
@@ -2044,7 +2074,8 @@ class MainWindow(QMainWindow):
         def toggle_fav():
             ok, msg = self.model.toggle_favorite(product_id)
             self.show_toast(msg, ok)
-            fav_btn.setText("★ 取消收藏" if not is_fav else "☆ 收藏商品")
+            now_fav = self.model.is_favorite(product_id)
+            fav_btn.setText("★ 取消收藏" if now_fav else "☆ 收藏商品")
         fav_btn.clicked.connect(toggle_fav)
         dialog.add_actions([
             ("返回列表", dialog.reject, "secondary"),
@@ -2098,7 +2129,6 @@ class MainWindow(QMainWindow):
                     p.end()
                     self._venue_icon_cache[emoji] = ic
                 item.setIcon(self._venue_icon_cache[emoji])
-                item.setIcon(ic)
 
     def capture_slot_selection(self) -> None:
         row = self.slot_table.currentRow()
@@ -2165,7 +2195,7 @@ class MainWindow(QMainWindow):
             except (ValueError, TypeError):
                 status = r["departure_time"]
             # 座位可视化：用方块表示
-            total_seats = 40  # 假设总座位40
+            total_seats = r.get("base_capacity", 40)
             filled = total_seats - r["seats_left"]
             bar_len = 8
             filled_blocks = int(filled / total_seats * bar_len) if total_seats else 0
@@ -2676,6 +2706,12 @@ class MainWindow(QMainWindow):
         college_input = QLineEdit(user.college)
         bio_input = QTextEdit()
         bio_input.setMinimumHeight(80)
+        # 预填充当前简介
+        try:
+            profile = self.model.profile_data()
+            bio_input.setPlainText(profile["user"].get("bio", ""))
+        except Exception:
+            pass
         layout.addRow("显示姓名", name_input)
         layout.addRow("学院/单位", college_input)
         layout.addRow("个人简介", bio_input)

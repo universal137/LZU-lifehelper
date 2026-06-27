@@ -24,7 +24,7 @@ DATA_DIR = APP_ROOT / "data"
 IMAGE_DIR = DATA_DIR / "images"
 EXPORT_DIR = DATA_DIR / "exports"
 DB_PATH = DATA_DIR / "lzu_lifehelper.db"
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 4
 logger = logging.getLogger("lzu_lifehelper.models")
 
 # 增量迁移：{目标版本: [SQL语句列表]}
@@ -41,6 +41,17 @@ MIGRATIONS: dict[int, list[str]] = {
         "CREATE INDEX IF NOT EXISTS idx_moments_category_status ON moments(category, status)",
         "CREATE INDEX IF NOT EXISTS idx_moment_comments_moment ON moment_comments(moment_id)",
         "CREATE INDEX IF NOT EXISTS idx_moment_likes_moment ON moment_likes(moment_id)",
+    ],
+    4: [
+        """CREATE TABLE IF NOT EXISTS favorites (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            product_id INTEGER NOT NULL,
+            created_at TEXT NOT NULL,
+            UNIQUE(user_id, product_id),
+            FOREIGN KEY (user_id) REFERENCES users(id),
+            FOREIGN KEY (product_id) REFERENCES products(id)
+        )""",
     ],
 }
 
@@ -900,7 +911,8 @@ class AppModel:
 
     def create_shuttle_ticket(self, route_id: int) -> tuple[bool, str]:
         user = self.require_user()
-        with self.connect() as conn:
+        conn = self.connect()
+        try:
             conn.execute("BEGIN IMMEDIATE")
             exists = conn.execute(
                 "SELECT 1 FROM shuttle_tickets WHERE route_id = ? AND user_id = ? AND ride_date = ? AND status = 'active'",
@@ -910,12 +922,17 @@ class AppModel:
                 conn.execute("ROLLBACK")
                 return False, "该班次今天已订过"
             route = conn.execute(
-                "SELECT id, seats_left FROM shuttle_routes WHERE id = ?", (route_id,)
+                "SELECT id, base_capacity FROM shuttle_routes WHERE id = ?", (route_id,)
             ).fetchone()
             if route is None:
                 conn.execute("ROLLBACK")
                 return False, "班次不存在"
-            if route["seats_left"] <= 0:
+            booked = conn.execute(
+                "SELECT COUNT(*) FROM shuttle_tickets WHERE route_id = ? AND ride_date = ? AND status = 'active'",
+                (route_id, today_text()),
+            ).fetchone()[0]
+            seats_left = route["base_capacity"] - booked
+            if seats_left <= 0:
                 conn.execute("ROLLBACK")
                 return False, "当前班次余座不足"
             conn.execute(
@@ -923,6 +940,12 @@ class AppModel:
                 (route_id, user.id, today_text(), now_text()),
             )
             conn.execute("COMMIT")
+        except Exception as e:
+            conn.execute("ROLLBACK")
+            logger.error("购票失败: %s", e)
+            return False, "购票失败"
+        finally:
+            conn.close()
         logger.info("校车购票: route_id=%d by user %d", route_id, user.id)
         return True, "校车票预订成功"
 
