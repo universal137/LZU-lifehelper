@@ -1535,7 +1535,7 @@ class MainWindow(QMainWindow):
             f'<div style="color:#6B7280;font-size:13px;margin-top:4px;">{esc(p["seller_name"])} · {esc(p.get("category", ""))}</div>'
             f'</div>'
             for p in summary["recent_products"]
-        ) or '<div style="color:#9CA3AF;padding:20px;text-align:center;">暂无商品</div>'
+        ) or '<div style="color:#9CA3AF;padding:30px;text-align:center;font-size:14px;">🛍 暂无商品<br><span style="font-size:12px;">去二手市场看看吧</span></div>'
         self.home_products.setHtml(products_html)
         activities_html = "".join(
             f'<div style="border-bottom:1px solid #E8ECF1;padding:10px 0;">'
@@ -1544,7 +1544,7 @@ class MainWindow(QMainWindow):
             f'🕐 {esc(a["start_time"])} · 📍 {esc(a["location"])} · 📁 {esc(a.get("category", ""))}</div>'
             f'</div>'
             for a in summary["recent_activities"]
-        ) or '<div style="color:#9CA3AF;padding:20px;text-align:center;">暂无活动</div>'
+        ) or '<div style="color:#9CA3AF;padding:30px;text-align:center;font-size:14px;">🎉 暂无活动<br><span style="font-size:12px;">去看看活动中心有什么精彩的</span></div>'
         self.home_activities.setHtml(activities_html)
 
     def clear_grid(self, grid: QGridLayout) -> None:
@@ -1580,7 +1580,20 @@ class MainWindow(QMainWindow):
             title.setWordWrap(True)
             price = QLabel(f"¥{product['price']:.2f}")
             price.setObjectName("priceText")
-            meta = QLabel(f"{product['category']} · {product['campus']} · {product['seller_name']}")
+            meta_text = f"{product['category']} · {product['campus']} · {product['seller_name']}"
+            # 显示发布时间
+            try:
+                created = datetime.strptime(product["created_at"], "%Y-%m-%d %H:%M:%S")
+                diff_hours = (datetime.now() - created).total_seconds() / 3600
+                if diff_hours < 1:
+                    meta_text += " · 刚刚"
+                elif diff_hours < 24:
+                    meta_text += f" · {int(diff_hours)}小时前"
+                else:
+                    meta_text += f" · {int(diff_hours // 24)}天前"
+            except (ValueError, TypeError):
+                pass
+            meta = QLabel(meta_text)
             meta.setObjectName("mutedText")
             meta.setWordWrap(True)
             btn = set_secondary(QPushButton("留言 / 详情"))
