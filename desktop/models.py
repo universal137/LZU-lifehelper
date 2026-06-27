@@ -489,7 +489,7 @@ class AppModel:
             }
             recent_products = conn.execute(
                 """
-                SELECT p.title, p.price, u.display_name AS seller_name
+                SELECT p.title, p.price, p.category, u.display_name AS seller_name
                 FROM products p JOIN users u ON u.id = p.seller_id
                 WHERE p.status = 'normal'
                 ORDER BY p.id DESC LIMIT 4
@@ -497,7 +497,7 @@ class AppModel:
             ).fetchall()
             recent_activities = conn.execute(
                 """
-                SELECT title, start_time, location
+                SELECT title, category, start_time, location
                 FROM activities
                 WHERE status = 'normal'
                 ORDER BY start_time ASC LIMIT 4

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from PySide6.QtCore import QEasingCurve, QPropertyAnimation, QRectF, Qt, QTimer, Signal
+from PySide6.QtCore import QEasingCurve, QPropertyAnimation, QRectF, QSize, Qt, QTimer, Signal
 from PySide6.QtGui import QColor, QFont, QPainter, QPixmap
 from PySide6.QtWidgets import (
     QComboBox,
@@ -74,6 +74,13 @@ def animate_number_count(label: QLabel, target: int, duration: int = 500) -> Non
     anim.valueChanged.connect(lambda v: label.setText(str(int(v))))
     anim.start()
     label._num_anim = anim
+    # 颜色闪烁动画：数字变化时短暂变金色再恢复
+    flash = QTimer()
+    flash.setSingleShot(True)
+    label.setStyleSheet("color: #FFD700;")
+    flash.timeout.connect(lambda: label.setStyleSheet(""))
+    flash.start(duration + 200)
+    label._flash_timer = flash
 
 
 def animate_dialog_open(dialog: QDialog) -> None:
@@ -119,23 +126,81 @@ def status_badge(text: str, status: str) -> QLabel:
     return label
 
 
-def product_pixmap(image_path: str | None, width: int, height: int) -> QPixmap:
+ASSETS_DIR = Path(__file__).resolve().parent.parent / "assets" / "images"
+
+CATEGORY_IMAGES = {
+    "书籍": "cat_books.jpg",
+    "运动": "cat_sports.jpg",
+    "数码": "cat_electronics.jpg",
+    "日用": "cat_daily.jpg",
+    "资料": "cat_clothing.jpg",
+    "器材": "cat_transport.jpg",
+}
+
+ACTIVITY_CATEGORY_IMAGES = {
+    "公益": "act_公益.jpg",
+    "体育": "act_体育.jpg",
+    "学术": "act_学术.jpg",
+    "文艺": "act_文艺.jpg",
+    "成长": "act_成长.jpg",
+}
+
+MOMENT_CATEGORY_IMAGES = {
+    "校园通知": "moment_通知.jpg",
+    "失物招领": "moment_失物.jpg",
+    "吐槽问答": "moment_问答.jpg",
+}
+
+
+def product_pixmap(image_path: str | None, width: int, height: int, category: str = "", title: str = "") -> QPixmap:
     if image_path:
         target = APP_ROOT / image_path
         if target.exists():
             pixmap = QPixmap(str(target))
             if not pixmap.isNull():
                 return pixmap.scaled(width, height, Qt.KeepAspectRatioByExpanding, Qt.SmoothTransformation)
+    # 根据标题关键词匹配具体商品图片
+    title_keywords = {
+        "平板": "prod_tablet.jpg", "支架": "prod_tablet.jpg",
+        "键盘": "prod_keyboard.jpg", "机械": "prod_keyboard.jpg",
+        "台灯": "prod_desklamp.jpg", "灯": "prod_light.jpg",
+        "笔记": "prod_notebook.jpg", "课程": "prod_notebook.jpg",
+        "教材": "prod_book.jpg", "数学": "prod_book.jpg", "单词": "prod_book.jpg",
+        "羽毛球": "prod_shuttle.jpg", "球": "prod_shuttle.jpg",
+        "摄影": "prod_light.jpg", "灯光": "prod_light.jpg",
+    }
+    # 也按分类做兜底匹配
+    cat_keywords = {
+        "数码": ["prod_keyboard.jpg", "prod_tablet.jpg"],
+        "日用": ["prod_desklamp.jpg"],
+        "资料": ["prod_notebook.jpg"],
+        "书籍": ["prod_book.jpg"],
+        "运动": ["prod_shuttle.jpg"],
+        "器材": ["prod_light.jpg"],
+    }
+    # 先按标题匹配
+    chosen = ""
+    for kw, fname in title_keywords.items():
+        if kw in title:
+            chosen = fname
+            break
+    # 标题没匹配到，按分类兜底
+    if not chosen and category in cat_keywords:
+        chosen = cat_keywords[category][0]
+    if chosen:
+        img_path = ASSETS_DIR / chosen
+        if img_path.exists():
+            pix = QPixmap(str(img_path))
+            if not pix.isNull():
+                return pix.scaled(width, height, Qt.KeepAspectRatioByExpanding, Qt.SmoothTransformation)
+    # 兜底
     pixmap = QPixmap(width, height)
-    pixmap.fill(QColor("#E9ECEF"))
+    pixmap.fill(QColor("#E8ECF1"))
     painter = QPainter(pixmap)
     painter.setRenderHint(QPainter.Antialiasing)
-    painter.setBrush(QColor("#003B7C"))
-    painter.setPen(Qt.NoPen)
-    painter.drawRoundedRect(18, 18, width - 36, height - 36, 18, 18)
-    painter.setPen(QColor("#FFFFFF"))
-    painter.setFont(QFont("Microsoft YaHei", 24, QFont.Bold))
-    painter.drawText(pixmap.rect(), Qt.AlignCenter, "LZU")
+    painter.setPen(QColor("#6B7280"))
+    painter.setFont(QFont("Microsoft YaHei", 14))
+    painter.drawText(pixmap.rect(), Qt.AlignCenter, category or "商品")
     painter.end()
     return pixmap
 
@@ -263,9 +328,11 @@ class BarChart(QWidget):
 
     def paintEvent(self, event) -> None:
         super().paintEvent(event)
+        from PySide6.QtGui import QLinearGradient, QPen
         painter = QPainter(self)
         painter.setRenderHint(QPainter.Antialiasing)
-        rect = self.rect().adjusted(22, 22, -22, -34)
+        rect = self.rect().adjusted(40, 22, -22, -34)
+        # 底部轴线
         painter.setPen(QColor("#DEE2E6"))
         painter.drawLine(rect.bottomLeft(), rect.bottomRight())
         if not self.rows:
@@ -274,6 +341,17 @@ class BarChart(QWidget):
             painter.end()
             return
         max_value = max([row["total"] for row in self.rows] + [1])
+        # 水平参考线（虚线）
+        grid_pen = QPen(QColor("#E8ECF1"), 1, Qt.DashLine)
+        painter.setPen(grid_pen)
+        for i in range(1, 5):
+            gy = rect.bottom() - int(rect.height() * i / 4)
+            painter.drawLine(int(rect.left()), gy, int(rect.right()), gy)
+            # Y轴刻度标签
+            painter.setPen(QColor("#9CA3AF"))
+            painter.setFont(QFont("Microsoft YaHei", 8))
+            painter.drawText(QRectF(0, gy - 10, 36, 20), Qt.AlignRight | Qt.AlignVCenter, str(int(max_value * i / 4)))
+            painter.setPen(grid_pen)
         gap = 16
         bar_width = max(34, int((rect.width() - gap * (len(self.rows) - 1)) / len(self.rows)))
         for index, row in enumerate(self.rows):
@@ -282,15 +360,31 @@ class BarChart(QWidget):
             x = rect.left() + index * (bar_width + gap)
             y = rect.bottom() - height
             bar_rect = QRectF(x, y, bar_width, height)
-            painter.setBrush(QColor("#00A896"))
+            # 渐变色：低值蓝色 → 高值金色
+            ratio = value / max_value if max_value else 0
+            grad = QLinearGradient(x, y, x, rect.bottom())
+            r_start = int(0 + 201 * ratio)
+            g_start = int(169 + 0 * ratio)
+            b_start = int(150 - 88 * ratio)
+            r_end = int(0 + 184 * ratio)
+            g_end = int(169 - 21 * ratio)
+            b_end = int(150 - 103 * ratio)
+            grad.setColorAt(0, QColor(r_start, g_start, b_start))
+            grad.setColorAt(1, QColor(r_end, g_end, b_end))
+            painter.setBrush(grad)
             painter.setPen(Qt.NoPen)
             painter.drawRoundedRect(bar_rect, 5, 5)
+            # 数值标签
             painter.setPen(QColor("#212529"))
             painter.setFont(QFont("Microsoft YaHei", 10, QFont.Bold))
             painter.drawText(QRectF(x, y - 26, bar_width, 20), Qt.AlignCenter, str(value))
+            # 名称标签（省略号截断）
             painter.setPen(QColor("#6C757D"))
             painter.setFont(QFont("Microsoft YaHei", 8))
-            painter.drawText(QRectF(x - 10, rect.bottom() + 6, bar_width + 20, 24), Qt.AlignCenter, row["name"][:6])
+            metrics = painter.fontMetrics()
+            name = row["name"]
+            elided = metrics.elidedText(name, Qt.ElideRight, bar_width + 20)
+            painter.drawText(QRectF(x - 10, rect.bottom() + 6, bar_width + 20, 24), Qt.AlignCenter, elided)
         painter.end()
 
 
@@ -568,6 +662,36 @@ class DetailDialog(QDialog):
         animate_dialog_open(self)
 
 
+class LoginVisualPanel(QFrame):
+    """登录页左侧视觉面板，绘制校园背景图+遮罩"""
+    _hero_pix: QPixmap | None = None
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setObjectName("loginVisual")
+        self.setMinimumWidth(450)
+        if LoginVisualPanel._hero_pix is None:
+            path = ASSETS_DIR / "login_hero.jpg"
+            if path.exists():
+                LoginVisualPanel._hero_pix = QPixmap(str(path))
+
+    def paintEvent(self, event):
+        from PySide6.QtGui import QPainter, QColor
+        p = QPainter(self)
+        p.setRenderHint(QPainter.Antialiasing)
+        if LoginVisualPanel._hero_pix and not LoginVisualPanel._hero_pix.isNull():
+            scaled = LoginVisualPanel._hero_pix.scaled(
+                self.size(), Qt.KeepAspectRatioByExpanding, Qt.SmoothTransformation
+            )
+            x = (self.width() - scaled.width()) // 2
+            y = (self.height() - scaled.height()) // 2
+            p.drawPixmap(x, y, scaled)
+            p.fillRect(0, 0, self.width(), self.height(), QColor(26, 26, 46, 130))
+        else:
+            p.fillRect(0, 0, self.width(), self.height(), QColor("#1A1A2E"))
+        p.end()
+
+
 class AuthPage(QWidget):
     login_success = Signal()
     notify = Signal(str, bool)
@@ -582,9 +706,7 @@ class AuthPage(QWidget):
         root.setContentsMargins(0, 0, 0, 0)
         root.setSpacing(0)
 
-        visual = QFrame()
-        visual.setObjectName("loginVisual")
-        visual.setMinimumWidth(450)
+        visual = LoginVisualPanel()
         visual_layout = QVBoxLayout(visual)
         visual_layout.setContentsMargins(60, 70, 60, 70)
         logo = QLabel("LZU")
@@ -751,15 +873,23 @@ class MainWindow(QMainWindow):
         user = self.model.require_user()
         side = QFrame()
         side.setObjectName("adminSidebar" if admin else "userSidebar")
-        side.setFixedWidth(220)
+        side.setFixedWidth(240)
         layout = QVBoxLayout(side)
         layout.setContentsMargins(20, 24, 20, 24)
         layout.setSpacing(18)
         brand = QLabel("兰大助手")
         brand.setObjectName("sidebarBrand")
+        # 用户头像 + 信息行
+        user_row = QHBoxLayout()
+        user_row.setSpacing(12)
+        avatar = QLabel(user.display_name[0] if user.display_name else "?")
+        avatar.setObjectName("sidebarAvatar")
+        avatar.setStyleSheet(f"background-color: {user.avatar_color};")
+        user_row.addWidget(avatar)
         info = QLabel(f"{user.display_name}\n{ROLE_LABELS.get(user.role, user.role)} · {user.college}")
         info.setObjectName("sidebarUser")
         info.setWordWrap(True)
+        user_row.addWidget(info, 1)
         nav = QListWidget()
         nav.setObjectName("navList")
         nav.setSpacing(6)
@@ -774,7 +904,7 @@ class MainWindow(QMainWindow):
         logout = set_secondary(QPushButton("退出登录"))
         logout.clicked.connect(self.logout)
         layout.addWidget(brand)
-        layout.addWidget(info)
+        layout.addLayout(user_row)
         layout.addSpacing(10)
         layout.addWidget(nav, 1)
         layout.addSpacing(10)
@@ -838,8 +968,10 @@ class MainWindow(QMainWindow):
         page, layout = self._content_page("首页概览", "校园服务集中入口，常用信息一屏查看。")
         cards = QHBoxLayout()
         self.user_kpi_labels: dict[str, QLabel] = {}
+        kpi_colors = {"products": "blue", "bookings": "green", "tickets": "orange", "activities": "purple"}
         for key, title in [("products", "🛍 在售商品"), ("bookings", "📋 我的预约"), ("tickets", "🎫 校车票"), ("activities", "🎉 已报名活动")]:
             card = card_frame()
+            card.setProperty("kpiColor", kpi_colors.get(key, "blue"))
             c = QVBoxLayout(card)
             t = QLabel(title)
             t.setObjectName("kpiTitle")
@@ -1003,6 +1135,7 @@ class MainWindow(QMainWindow):
         split.setSpacing(16)
         self.moment_list = QListWidget()
         self.moment_list.setObjectName("momentList")
+        self.moment_list.setIconSize(QSize(48, 48))
         self.moment_list.currentItemChanged.connect(lambda _cur, _old: self.open_moment_detail())
         self.moment_detail = QTextEdit()
         self.moment_detail.setReadOnly(True)
@@ -1013,6 +1146,26 @@ class MainWindow(QMainWindow):
 
     def _build_profile_page(self) -> QWidget:
         page, layout = self._content_page("个人中心", "查看个人资料、预约记录和修改密码。")
+        # 用户大头像
+        user = self.model.require_user()
+        avatar_row = QHBoxLayout()
+        avatar_row.setSpacing(20)
+        big_avatar = QLabel(user.display_name[0] if user.display_name else "?")
+        big_avatar.setObjectName("sidebarAvatar")
+        big_avatar.setFixedSize(80, 80)
+        big_avatar.setStyleSheet(f"background-color: {user.avatar_color}; border-radius: 40px; color: #FFFFFF; font-size: 32px; font-weight: bold; qproperty-alignment: AlignCenter;")
+        avatar_row.addWidget(big_avatar)
+        avatar_info = QVBoxLayout()
+        avatar_info.setSpacing(4)
+        name_label = QLabel(user.display_name)
+        name_label.setStyleSheet("font-size: 20px; font-weight: bold; color: #1A1A2E;")
+        role_label = QLabel(f"{ROLE_LABELS.get(user.role, user.role)} · {user.college}")
+        role_label.setStyleSheet("color: #6B7280; font-size: 14px;")
+        avatar_info.addWidget(name_label)
+        avatar_info.addWidget(role_label)
+        avatar_info.addStretch(1)
+        avatar_row.addLayout(avatar_info, 1)
+        layout.addLayout(avatar_row)
         split = QHBoxLayout()
         split.setSpacing(20)
         self.profile_text = QTextEdit()
@@ -1056,8 +1209,10 @@ class MainWindow(QMainWindow):
         page, layout = self._content_page("数据总览", "系统后台核心指标与场馆预约热度。")
         cards = QHBoxLayout()
         self.admin_kpi_labels: dict[str, QLabel] = {}
+        admin_kpi_colors = {"users": "teal", "today_bookings": "orange", "products": "blue", "moments": "purple"}
         for key, title in [("users", "👥 用户总数"), ("today_bookings", "📅 今日预约"), ("products", "📦 在售商品"), ("moments", "📝 动态数量")]:
             card = card_frame()
+            card.setProperty("kpiColor", admin_kpi_colors.get(key, "blue"))
             c = QVBoxLayout(card)
             t = QLabel(title)
             t.setObjectName("kpiTitle")
@@ -1204,7 +1359,7 @@ class MainWindow(QMainWindow):
         table.setFrameStyle(QFrame.NoFrame)
         return table
 
-    def fill_table(self, table: QTableWidget, rows: list[list[str]], status_column: int | None = None) -> None:
+    def fill_table(self, table: QTableWidget, rows: list[list[str]], status_column: int | None = None, seat_column: int | None = None) -> None:
         if not rows:
             table.setRowCount(1)
             table.setSpan(0, 0, 1, table.columnCount())
@@ -1227,6 +1382,21 @@ class MainWindow(QMainWindow):
                             font = item.font()
                             font.setItalic(True)
                             item.setFont(font)
+                # 余量/余座数字颜色区分
+                if seat_column is not None and c == seat_column:
+                    try:
+                        seats = int(value)
+                        if seats > 5:
+                            item.setForeground(QColor("#10B981"))
+                        elif seats > 0:
+                            item.setForeground(QColor("#F59E0B"))
+                        else:
+                            item.setForeground(QColor("#EF4444"))
+                        font = item.font()
+                        font.setBold(True)
+                        item.setFont(font)
+                    except ValueError:
+                        pass
                 if "封禁" in row_status or "下架" in row_status or "删除" in row_status:
                     item.setBackground(QColor("#F1F3F5"))
                 table.setItem(r, c, item)
@@ -1247,22 +1417,22 @@ class MainWindow(QMainWindow):
         for key, value in summary["totals"].items():
             animate_number_count(self.user_kpi_labels[key], value)
         products_html = "".join(
-            f'<div style="border-bottom:1px solid #E8ECF1; padding:10px 0;">'
-            f'<div><b style="color:#C9A962; font-size:15px;">{p["title"]}</b> '
-            f'<span style="color:#E74C3C; font-weight:bold; font-size:15px;">¥{p["price"]:.0f}</span></div>'
-            f'<div style="color:#6B7280; font-size:13px; margin-top:4px;">{p["seller_name"]}</div>'
+            f'<div style="border-bottom:1px solid #E8ECF1;padding:10px 0;">'
+            f'<div><b style="color:#C9A962;font-size:15px;">🛍 {p["title"]}</b> '
+            f'<span style="color:#E74C3C;font-weight:bold;font-size:15px;">¥{p["price"]:.0f}</span></div>'
+            f'<div style="color:#6B7280;font-size:13px;margin-top:4px;">{p["seller_name"]} · {p.get("category", "")}</div>'
             f'</div>'
             for p in summary["recent_products"]
-        ) or '<div style="color:#9CA3AF; padding:20px; text-align:center;">暂无商品</div>'
+        ) or '<div style="color:#9CA3AF;padding:20px;text-align:center;">暂无商品</div>'
         self.home_products.setHtml(products_html)
         activities_html = "".join(
-            f'<div style="border-bottom:1px solid #E8ECF1; padding:10px 0;">'
-            f'<div><b style="color:#1A1A2E; font-size:15px;">{a["title"]}</b></div>'
-            f'<div style="color:#6B7280; font-size:13px; margin-top:4px;">'
-            f'🕐 {a["start_time"]} · 📍 {a["location"]}</div>'
+            f'<div style="border-bottom:1px solid #E8ECF1;padding:10px 0;">'
+            f'<div><b style="color:#1A1A2E;font-size:15px;">🎉 {a["title"]}</b></div>'
+            f'<div style="color:#6B7280;font-size:13px;margin-top:4px;">'
+            f'🕐 {a["start_time"]} · 📍 {a["location"]} · 📁 {a.get("category", "")}</div>'
             f'</div>'
             for a in summary["recent_activities"]
-        ) or '<div style="color:#9CA3AF; padding:20px; text-align:center;">暂无活动</div>'
+        ) or '<div style="color:#9CA3AF;padding:20px;text-align:center;">暂无活动</div>'
         self.home_activities.setHtml(activities_html)
 
     def clear_grid(self, grid: QGridLayout) -> None:
@@ -1282,7 +1452,7 @@ class MainWindow(QMainWindow):
             layout.setSpacing(8)
             layout.setContentsMargins(12, 12, 12, 12)
             img = QLabel()
-            img.setPixmap(product_pixmap(product["image_path"], 260, 120))
+            img.setPixmap(product_pixmap(product["image_path"], 260, 120, product.get("category", ""), product.get("title", "")))
             img.setFixedHeight(120)
             img.setAlignment(Qt.AlignCenter)
             title = QLabel(product["title"])
@@ -1333,7 +1503,7 @@ class MainWindow(QMainWindow):
             detail["status"],
         )
         image = QLabel()
-        image.setPixmap(product_pixmap(detail["image_path"], 650, 180))
+        image.setPixmap(product_pixmap(detail["image_path"], 650, 180, detail.get("category", ""), detail.get("title", "")))
         image.setFixedHeight(180)
         image.setAlignment(Qt.AlignCenter)
         dialog.root.addWidget(image)
@@ -1368,6 +1538,7 @@ class MainWindow(QMainWindow):
         self.fill_table(
             self.slot_table,
             [[r["name"], r["category"], r["campus"], r["location"], r["slot_date"], r["slot_time"], str(r["seats_left"])] for r in self.slot_rows],
+            seat_column=6,
         )
         self.booking_rows = self.model.list_my_bookings()
         self.fill_table(
@@ -1375,6 +1546,26 @@ class MainWindow(QMainWindow):
             [[r["name"], r["location"], r["slot_date"], r["slot_time"], STATUS_LABELS.get(r["status"], r["status"])] for r in self.booking_rows],
             4,
         )
+        # 为场馆表格第一列添加场馆图标
+        venue_icons = {"羽毛球场": "🏸", "篮球场": "🏀", "足球场": "⚽", "游泳池": "🏊", "乒乓球室": "🏓", "网球场": "🎾"}
+        for row in range(self.slot_table.rowCount()):
+            item = self.slot_table.item(row, 0)
+            if item:
+                venue_name = item.text()
+                emoji = "🏟️"
+                for key, e in venue_icons.items():
+                    if key in venue_name:
+                        emoji = e
+                        break
+                ic = QPixmap(24, 24)
+                ic.fill(QColor("#10B981"))
+                p = QPainter(ic)
+                p.setRenderHint(QPainter.Antialiasing)
+                p.setPen(QColor("#FFFFFF"))
+                p.setFont(QFont("Segoe UI Emoji", 14))
+                p.drawText(ic.rect(), Qt.AlignCenter, emoji)
+                p.end()
+                item.setIcon(ic)
 
     def capture_slot_selection(self) -> None:
         row = self.slot_table.currentRow()
@@ -1425,7 +1616,21 @@ class MainWindow(QMainWindow):
         self.fill_table(
             self.bus_table,
             [[r["route_name"], r["from_campus"], r["to_campus"], r["station"], r["departure_time"], str(r["seats_left"])] for r in self.bus_rows],
+            seat_column=5,
         )
+        # 为校车表格第一列添加巴士图标
+        bus_icon = QPixmap(24, 24)
+        bus_icon.fill(QColor("#3B82F6"))
+        bp = QPainter(bus_icon)
+        bp.setRenderHint(QPainter.Antialiasing)
+        bp.setPen(QColor("#FFFFFF"))
+        bp.setFont(QFont("Segoe UI Emoji", 14))
+        bp.drawText(bus_icon.rect(), Qt.AlignCenter, "🚌")
+        bp.end()
+        for row in range(self.bus_table.rowCount()):
+            item = self.bus_table.item(row, 0)
+            if item:
+                item.setIcon(bus_icon)
         tickets = self.model.list_my_tickets()
         if tickets:
             tickets_html = "".join(
@@ -1470,6 +1675,7 @@ class MainWindow(QMainWindow):
             self.activity_table,
             [[r["title"], r["category"], r["organizer_name"], r["start_time"], r["location"], str(r["seats_left"]), STATUS_LABELS.get(r["status"], r["status"])] for r in self.activity_rows],
             6,
+            seat_column=5,
         )
         self.open_activity_detail()
 
@@ -1487,7 +1693,7 @@ class MainWindow(QMainWindow):
         bar_color = "#27AE60" if ratio < 0.7 else "#E74C3C" if ratio >= 0.95 else "#C9A962"
         self.activity_detail.setHtml(
             f'<div style="padding:8px 0;">'
-            f'<div style="font-size:18px; font-weight:bold; color:#1A1A2E;">{detail["title"]}</div>'
+            f'<div style="font-size:18px; font-weight:bold; color:#1A1A2E;">🎉 {detail["title"]}</div>'
             f'<div style="color:#6B7280; font-size:13px; margin-top:12px; line-height:1.7;">{detail["summary"]}</div>'
             f'<div style="margin-top:16px; padding:12px; background:#FAFBFD; border-radius:8px;">'
             f'<div style="color:#6B7280; font-size:13px; margin-bottom:8px;">报名进度</div>'
@@ -1585,6 +1791,13 @@ class MainWindow(QMainWindow):
         for row in self.moment_rows:
             item = QListWidgetItem(f"[{row['category']}] {row['display_name']}  {row['created_at']}\n♥ {row['like_count']}   评论 {row['comment_count']}\n{row['content'][:70]}")
             item.setData(Qt.UserRole, row["id"])
+            # 添加分类图标
+            img_file = MOMENT_CATEGORY_IMAGES.get(row["category"], "")
+            if img_file:
+                img_path = ASSETS_DIR / img_file
+                if img_path.exists():
+                    pix = QPixmap(str(img_path)).scaled(48, 48, Qt.KeepAspectRatioByExpanding, Qt.SmoothTransformation)
+                    item.setIcon(pix)
             self.moment_list.addItem(item)
         if self.moment_rows:
             self.moment_list.setCurrentRow(0)
