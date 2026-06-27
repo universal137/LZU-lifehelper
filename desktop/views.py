@@ -35,7 +35,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from desktop.models import APP_ROOT, RESOURCE_ROOT, AppModel
+from desktop.models import APP_ROOT, RESOURCE_ROOT, AppModel, avatar_color
 
 
 ROLE_LABELS = {
@@ -1051,11 +1051,17 @@ class MainWindow(QMainWindow):
         tools = QHBoxLayout()
         tools.setSpacing(12)
         self.market_keyword = QLineEdit()
-        self.market_keyword.setPlaceholderText("搜索商品")
+        self.market_keyword.setPlaceholderText("搜索商品（实时筛选）")
         self.market_keyword.setMinimumWidth(200)
+        self._search_timer = QTimer()
+        self._search_timer.setSingleShot(True)
+        self._search_timer.setInterval(300)
+        self._search_timer.timeout.connect(self.refresh_market)
+        self.market_keyword.textChanged.connect(lambda: self._search_timer.start())
         self.market_category = QComboBox()
         self.market_category.setMinimumWidth(120)
         self.market_category.addItems(self.model.product_categories())
+        self.market_category.currentTextChanged.connect(lambda: self.refresh_market())
         search = set_secondary(QPushButton("筛选"))
         search.clicked.connect(self.refresh_market)
         publish = set_primary(QPushButton("发布商品"))
@@ -1445,19 +1451,23 @@ class MainWindow(QMainWindow):
                             font = item.font()
                             font.setItalic(True)
                             item.setFont(font)
-                # 余量/余座数字颜色区分
+                # 余量/余座数字颜色区分 + 背景色
                 if seat_column is not None and c == seat_column:
                     try:
                         seats = int(value)
                         if seats > 5:
                             item.setForeground(QColor("#10B981"))
+                            item.setBackground(QColor("#ECFDF5"))
                         elif seats > 0:
                             item.setForeground(QColor("#F59E0B"))
+                            item.setBackground(QColor("#FFFBEB"))
                         else:
                             item.setForeground(QColor("#EF4444"))
+                            item.setBackground(QColor("#FEF2F2"))
                         font = item.font()
                         font.setBold(True)
                         item.setFont(font)
+                        item.setTextAlignment(Qt.AlignCenter)
                     except ValueError:
                         pass
                 if "封禁" in row_status or "下架" in row_status or "删除" in row_status:
@@ -1927,11 +1937,13 @@ class MainWindow(QMainWindow):
             return
         if detail["comments"]:
             comments_html = "".join(
-                f'<div style="border-bottom:1px solid #E8ECF1; padding:10px 0;">'
-                f'<div style="color:#6B7280; font-size:12px;">'
+                f'<table style="width:100%; border-bottom:1px solid #E8ECF1; padding:10px 0;"><tr>'
+                f'<td style="width:36px; vertical-align:top; padding-top:2px;">'
+                f'<div style="width:30px; height:30px; border-radius:15px; background:{avatar_color(c["display_name"])}; color:#FFF; font-size:13px; font-weight:bold; text-align:center; line-height:30px;">{esc(c["display_name"][0])}</div></td>'
+                f'<td style="vertical-align:top;"><div style="color:#6B7280; font-size:12px;">'
                 f'<b style="color:#1A1A2E;">{esc(c["display_name"])}</b> · {esc(c["created_at"])}</div>'
-                f'<div style="margin-top:4px; color:#1A1A2E;">{esc(c["content"])}</div>'
-                f'</div>'
+                f'<div style="margin-top:4px; color:#1A1A2E;">{esc(c["content"])}</div></td>'
+                f'</tr></table>'
                 for c in detail["comments"]
             )
         else:
