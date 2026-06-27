@@ -1193,7 +1193,16 @@ class MainWindow(QMainWindow):
         like.clicked.connect(self.toggle_like)
         comment = set_secondary(QPushButton("评论"))
         comment.clicked.connect(self.open_comment_dialog)
+        self.moment_keyword = QLineEdit()
+        self.moment_keyword.setPlaceholderText("搜索动态...")
+        self.moment_keyword.setMinimumWidth(160)
+        self._moment_search_timer = QTimer()
+        self._moment_search_timer.setSingleShot(True)
+        self._moment_search_timer.setInterval(300)
+        self._moment_search_timer.timeout.connect(self.refresh_moments)
+        self.moment_keyword.textChanged.connect(lambda: self._moment_search_timer.start())
         tools.addWidget(self.moment_category)
+        tools.addWidget(self.moment_keyword)
         tools.addWidget(refresh)
         tools.addStretch(1)
         tools.addWidget(publish)
@@ -1313,12 +1322,22 @@ class MainWindow(QMainWindow):
     def _build_admin_users(self) -> QWidget:
         page, layout = self._content_page("用户管理", "查看使用者并执行封禁、解封。")
         tools = QHBoxLayout()
+        tools.setSpacing(12)
+        self.admin_user_filter = QLineEdit()
+        self.admin_user_filter.setPlaceholderText("搜索用户（账号/姓名/学院）")
+        self.admin_user_filter.setMinimumWidth(200)
+        self._admin_user_search_timer = QTimer()
+        self._admin_user_search_timer.setSingleShot(True)
+        self._admin_user_search_timer.setInterval(300)
+        self._admin_user_search_timer.timeout.connect(self.refresh_admin_users)
+        self.admin_user_filter.textChanged.connect(lambda: self._admin_user_search_timer.start())
         refresh = set_secondary(QPushButton("刷新"))
         refresh.clicked.connect(self.refresh_admin_users)
         ban = set_danger(QPushButton("封禁用户"))
         ban.clicked.connect(lambda: self.admin_change_user("banned"))
         unban = set_primary(QPushButton("解封用户"))
         unban.clicked.connect(lambda: self.admin_change_user("active"))
+        tools.addWidget(self.admin_user_filter, 1)
         tools.addStretch(1)
         tools.addWidget(refresh)
         tools.addWidget(ban)
@@ -1613,9 +1632,10 @@ class MainWindow(QMainWindow):
         dialog.root.addWidget(image)
         dialog.add_meta_grid([
             ("价格", f"¥{detail['price']:.2f}"),
-            ("卖家", detail["seller_name"]),
+            ("卖家", f"● {detail['seller_name']}"),
             ("校区", detail["campus"]),
             ("单位", detail["seller_college"]),
+            ("发布时间", detail["created_at"]),
         ])
         dialog.add_section("商品描述", detail["description"], 80)
         if detail["messages"]:
@@ -1750,7 +1770,13 @@ class MainWindow(QMainWindow):
                     status = f"🕐 {int(diff // 3600)}小时后"
             except (ValueError, TypeError):
                 status = r["departure_time"]
-            table_rows.append([r["route_name"], r["from_campus"], r["to_campus"], r["station"], r["departure_time"], str(r["seats_left"]), status])
+            # 座位可视化：用方块表示
+            total_seats = 40  # 假设总座位40
+            filled = total_seats - r["seats_left"]
+            bar_len = 8
+            filled_blocks = int(filled / total_seats * bar_len) if total_seats else 0
+            seat_bar = "█" * filled_blocks + "░" * (bar_len - filled_blocks)
+            table_rows.append([r["route_name"], r["from_campus"], r["to_campus"], r["station"], r["departure_time"], f"{r['seats_left']}  {seat_bar}", status])
         self.fill_table(
             self.bus_table,
             table_rows,
@@ -1936,6 +1962,10 @@ class MainWindow(QMainWindow):
         # 记住当前选中项
         prev_id = self.current_moment_id
         self.moment_rows = self.model.list_moments(self.moment_category.currentText())
+        # 关键词筛选
+        keyword = self.moment_keyword.text().strip().lower()
+        if keyword:
+            self.moment_rows = [r for r in self.moment_rows if keyword in r["content"].lower() or keyword in r["display_name"].lower() or keyword in r["category"].lower()]
         self.moment_list.blockSignals(True)
         self.moment_list.clear()
         restore_row = 0
@@ -2174,9 +2204,13 @@ class MainWindow(QMainWindow):
 
     def refresh_admin_users(self) -> None:
         self.admin_user_rows = self.model.admin_users()
+        keyword = self.admin_user_filter.text().strip().lower()
+        rows = self.admin_user_rows
+        if keyword:
+            rows = [r for r in rows if keyword in r["username"].lower() or keyword in r["display_name"].lower() or keyword in r["college"].lower()]
         self.fill_table(
             self.admin_user_table,
-            [[r["username"], r["display_name"], ROLE_LABELS.get(r["role"], r["role"]), STATUS_LABELS.get(r["status"], r["status"]), r["college"], r["created_at"]] for r in self.admin_user_rows],
+            [[r["username"], r["display_name"], ROLE_LABELS.get(r["role"], r["role"]), STATUS_LABELS.get(r["status"], r["status"]), r["college"], r["created_at"]] for r in rows],
             3,
         )
 
