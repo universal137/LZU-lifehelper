@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import datetime
 import html as _html
 from pathlib import Path
 
@@ -1010,7 +1011,8 @@ class MainWindow(QMainWindow):
         return self._shell_page(sidebar, self.user_pages)
 
     def _build_user_home(self) -> QWidget:
-        page, layout = self._content_page("首页概览", "校园服务集中入口，常用信息一屏查看。")
+        user = self.model.require_user()
+        page, layout = self._content_page("首页概览", f"👋 欢迎回来，{user.display_name}！校园服务集中入口，常用信息一屏查看。")
         cards = QHBoxLayout()
         self.user_kpi_labels: dict[str, QLabel] = {}
         kpi_colors = {"products": "blue", "bookings": "green", "tickets": "orange", "activities": "purple"}
@@ -1530,7 +1532,15 @@ class MainWindow(QMainWindow):
             img.setPixmap(product_pixmap(product["image_path"], 260, 120, product.get("category", ""), product.get("title", "")))
             img.setFixedHeight(120)
             img.setAlignment(Qt.AlignCenter)
-            title = QLabel(product["title"])
+            title_text = product["title"]
+            # 24小时内发布显示NEW标签
+            try:
+                created = datetime.strptime(product["created_at"], "%Y-%m-%d %H:%M:%S")
+                if (datetime.now() - created).total_seconds() < 86400:
+                    title_text = f"🆕 {title_text}"
+            except (ValueError, TypeError):
+                pass
+            title = QLabel(title_text)
             title.setObjectName("cardTitle")
             title.setWordWrap(True)
             price = QLabel(f"¥{product['price']:.2f}")
@@ -1897,21 +1907,21 @@ class MainWindow(QMainWindow):
         for idx, row in enumerate(self.moment_rows):
             item = QListWidgetItem(f"[{row['category']}] {row['display_name']}  {row['created_at']}\n♥ {row['like_count']}   评论 {row['comment_count']}\n{row['content'][:70]}")
             item.setData(Qt.UserRole, row["id"])
-            # 分类图标缓存
-            if not hasattr(self, "_moment_icon_cache"):
-                self._moment_icon_cache: dict[str, QPixmap] = {}
-            cat = row["category"]
-            if cat not in self._moment_icon_cache:
-                img_file = MOMENT_CATEGORY_IMAGES.get(cat, "")
-                if img_file:
-                    img_path = ASSETS_DIR / img_file
-                    if img_path.exists():
-                        self._moment_icon_cache[cat] = QPixmap(str(img_path)).scaled(48, 48, Qt.KeepAspectRatioByExpanding, Qt.SmoothTransformation)
-                if cat not in self._moment_icon_cache:
-                    self._moment_icon_cache[cat] = QPixmap()  # 空占位
-            icon = self._moment_icon_cache[cat]
-            if not icon.isNull():
-                item.setIcon(icon)
+            # 作者头像图标（彩色圆形+首字母）
+            if not hasattr(self, "_moment_avatar_cache"):
+                self._moment_avatar_cache: dict[str, QPixmap] = {}
+            author = row["display_name"]
+            if author not in self._moment_avatar_cache:
+                av = QPixmap(48, 48)
+                av.fill(QColor(avatar_color(author)))
+                p = QPainter(av)
+                p.setRenderHint(QPainter.Antialiasing)
+                p.setPen(QColor("#FFFFFF"))
+                p.setFont(QFont("Microsoft YaHei", 18, QFont.Bold))
+                p.drawText(av.rect(), Qt.AlignCenter, author[0] if author else "?")
+                p.end()
+                self._moment_avatar_cache[author] = av
+            item.setIcon(self._moment_avatar_cache[author])
             self.moment_list.addItem(item)
             if prev_id is not None and row["id"] == prev_id:
                 restore_row = idx
