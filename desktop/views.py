@@ -1293,6 +1293,16 @@ class MainWindow(QMainWindow):
         self.booking_category = QComboBox()
         self.booking_category.setMinimumWidth(120)
         self.booking_category.addItems(self.model.venue_categories())
+        # 日期快捷筛选
+        self.booking_date = QComboBox()
+        self.booking_date.setMinimumWidth(120)
+        from datetime import date as _date, timedelta as _td
+        self.booking_date.addItem("全部日期")
+        for i in range(7):
+            d = _date.today() + _td(days=i)
+            self.booking_date.addItem(d.strftime("%m-%d ") + ["一", "二", "三", "四", "五", "六", "日"][d.weekday()])
+        self.booking_date.currentTextChanged.connect(lambda: self.refresh_bookings())
+        self.booking_category.currentTextChanged.connect(lambda: self.refresh_bookings())
         refresh = set_secondary(QPushButton("刷新"))
         refresh.clicked.connect(self.refresh_bookings)
         book = set_primary(QPushButton("点击预约"))
@@ -1300,6 +1310,7 @@ class MainWindow(QMainWindow):
         cancel = set_danger(QPushButton("取消我的预约"))
         cancel.clicked.connect(self.cancel_booking)
         tools.addWidget(self.booking_category)
+        tools.addWidget(self.booking_date)
         tools.addWidget(refresh)
         tools.addStretch(1)
         tools.addWidget(book)
@@ -1938,16 +1949,25 @@ class MainWindow(QMainWindow):
             ("发布时间", detail["created_at"]),
         ])
         dialog.add_section("商品描述", detail["description"], 80)
-        # 相似商品推荐
+        # 相似商品推荐 + 价格对比
         similar = self.model.list_products(category=detail["category"])
-        similar = [s for s in similar if s["id"] != product_id][:3]
+        similar = [s for s in similar if s["id"] != product_id][:5]
         if similar:
-            similar_html = "".join(
+            avg_price = sum(s["price"] for s in similar) / len(similar)
+            price_diff = detail["price"] - avg_price
+            price_indicator = "低于均价 ✅" if price_diff < 0 else "高于均价 ⚠️" if price_diff > 0 else "均价"
+            price_color = "#10B981" if price_diff < 0 else "#EF4444" if price_diff > 0 else "#6B7280"
+            similar_html = (
+                f'<div style="padding:8px 0; margin-bottom:8px; background:#FAFBFD; border-radius:8px;">'
+                f'<div style="color:#6B7280; font-size:12px;">同类均价: <b style="color:#1A1A2E;">¥{avg_price:.0f}</b> '
+                f'· {price_indicator} (<span style="color:{price_color};">{price_diff:+.0f}元</span>)</div></div>'
+            )
+            similar_html += "".join(
                 f'<div style="border-bottom:1px solid #E8ECF1; padding:6px 0;">'
                 f'<b style="color:#C9A962;">{esc(s["title"])}</b> '
                 f'<span style="color:#E74C3C;">¥{s["price"]:.0f}</span> '
                 f'<span style="color:#9CA3AF; font-size:12px;">{esc(s["seller_name"])}</span></div>'
-                for s in similar
+                for s in similar[:3]
             )
             box = dialog.add_section("同类推荐", "", 80)
             box.setHtml(similar_html)
@@ -1973,8 +1993,18 @@ class MainWindow(QMainWindow):
             if ok:
                 dialog.accept()
 
+        # 收藏按钮
+        is_fav = self.model.is_favorite(product_id)
+        fav_text = "★ 取消收藏" if is_fav else "☆ 收藏商品"
+        fav_btn = set_secondary(QPushButton(fav_text))
+        def toggle_fav():
+            ok, msg = self.model.toggle_favorite(product_id)
+            self.show_toast(msg, ok)
+            fav_btn.setText("★ 取消收藏" if not is_fav else "☆ 收藏商品")
+        fav_btn.clicked.connect(toggle_fav)
         dialog.add_actions([
             ("返回列表", dialog.reject, "secondary"),
+            fav_btn,
             ("我要留言", leave_message, "primary"),
         ])
         if dialog.exec() == QDialog.Accepted:
@@ -1982,6 +2012,13 @@ class MainWindow(QMainWindow):
 
     def refresh_bookings(self) -> None:
         self.slot_rows = self.model.list_slots(self.booking_category.currentText())
+        # 日期筛选
+        date_text = self.booking_date.currentText()
+        if date_text != "全部日期":
+            filter_date = date_text.split()[0]  # "06-27 一" -> "06-27"
+            year = datetime.now().strftime("%Y")
+            filter_date = f"{year}-{filter_date}"
+            self.slot_rows = [r for r in self.slot_rows if r["slot_date"] == filter_date]
         self.fill_table(
             self.slot_table,
             [[r["name"], r["category"], r["campus"], r["location"], r["slot_date"], r["slot_time"], str(r["seats_left"])] for r in self.slot_rows],
@@ -2425,9 +2462,39 @@ class MainWindow(QMainWindow):
             self.show_toast("请先选择动态", False)
             return
         ok, msg = self.model.toggle_like(self.current_moment_id)
-        self.show_toast(msg, ok)
         if ok:
+            # 心跳动画效果
+            heart = QLabel("❤️", self)
+            heart.setStyleSheet("font-size: 48px; background: transparent;")
+            heart.setAlignment(Qt.AlignCenter)
+            heart.setFixedSize(60, 60)
+            # 定位到点赞按钮附近
+            heart.move(self.width() // 2 - 30, self.height() // 2 - 30)
+            heart.show()
+            anim = QPropertyAnimation(heart, b"geometry")
+            anim.setDuration(600)
+            start = heart.geometry()
+            anim.setStartValue(start)
+            anim.setKeyValueAt(0.3, QRectF(start.x() - 10, start.y() - 20, 80, 80).toRect())
+            anim.setKeyValueAt(0.6, QRectF(start.x(), start.y(), 60, 60).toRect())
+            anim.setEndValue(QRectF(start.x(), start.y() - 40, 60, 60).toRect())
+            anim.setEasingCurve(QEasingCurve.OutElastic)
+            opacity = QGraphicsOpacityEffect(heart)
+            heart.setGraphicsEffect(opacity)
+            fade = QPropertyAnimation(opacity, b"opacity")
+            fade.setDuration(600)
+            fade.setStartValue(1.0)
+            fade.setKeyValueAt(0.7, 1.0)
+            fade.setEndValue(0.0)
+            anim.start()
+            fade.start()
+            heart._anim = anim
+            heart._fade = fade
+            QTimer.singleShot(700, heart.deleteLater)
+            self.show_toast(msg, ok)
             self.refresh_moments()
+        else:
+            self.show_toast(msg, ok)
 
     def open_comment_dialog(self) -> None:
         if self.current_moment_id is None:
@@ -2497,8 +2564,27 @@ class MainWindow(QMainWindow):
             f'<tr><td style="padding:6px 12px; color:#6B7280;">生活圈动态</td><td style="padding:6px 0; font-weight:bold; color:#C9A962;">{data["moment_count"]} 条</td></tr>'
             f'<tr><td style="padding:6px 12px; color:#6B7280;">有效预约</td><td style="padding:6px 0; font-weight:bold; color:#27AE60;">{active_bookings} 个</td></tr>'
             f'<tr><td style="padding:6px 12px; color:#6B7280;">有效车票</td><td style="padding:6px 0; font-weight:bold; color:#3B82F6;">{active_tickets} 张</td></tr>'
-            f'</table></div></div>'
+            f'</table></div>'
+            # 我的收藏
+            f'{self._build_favorites_html()}'
+            f'</div>'
         )
+
+    def _build_favorites_html(self) -> str:
+        try:
+            favs = self.model.get_favorites()
+        except Exception:
+            favs = []
+        if not favs:
+            return '<div style="margin-top:16px;"><div style="font-weight:bold; color:#C9A962; margin-bottom:8px;">⭐ 我的收藏</div><div style="color:#9CA3AF; padding:12px; text-align:center;">暂无收藏</div></div>'
+        items = "".join(
+            f'<div style="border-bottom:1px solid #E8ECF1; padding:6px 0;">'
+            f'<b style="color:#C9A962;">{esc(f["title"])}</b> '
+            f'<span style="color:#E74C3C;">¥{f["price"]:.0f}</span> '
+            f'<span style="color:#9CA3AF; font-size:12px;">{esc(f["seller_name"])}</span></div>'
+            for f in favs[:5]
+        )
+        return f'<div style="margin-top:16px;"><div style="font-weight:bold; color:#C9A962; margin-bottom:8px;">⭐ 我的收藏 ({len(favs)})</div>{items}</div>'
 
     def change_password(self) -> None:
         if self.new_password.text() != self.confirm_password.text():

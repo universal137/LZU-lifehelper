@@ -300,6 +300,16 @@ class AppModel:
                 created_at TEXT NOT NULL,
                 FOREIGN KEY (admin_id) REFERENCES users(id)
             );
+
+            CREATE TABLE IF NOT EXISTS favorites (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                product_id INTEGER NOT NULL,
+                created_at TEXT NOT NULL,
+                UNIQUE(user_id, product_id),
+                FOREIGN KEY (user_id) REFERENCES users(id),
+                FOREIGN KEY (product_id) REFERENCES products(id)
+            );
             """
         )
         self._create_indexes(conn)
@@ -700,6 +710,47 @@ class AppModel:
         result = dict(row)
         result["messages"] = [dict(item) for item in messages]
         return result
+
+    def toggle_favorite(self, product_id: int) -> tuple[bool, str]:
+        user = self.require_user()
+        with self.connect() as conn:
+            existing = conn.execute(
+                "SELECT id FROM favorites WHERE user_id = ? AND product_id = ?",
+                (user.id, product_id),
+            ).fetchone()
+            if existing:
+                conn.execute("DELETE FROM favorites WHERE id = ?", (existing["id"],))
+                return True, "已取消收藏"
+            conn.execute(
+                "INSERT INTO favorites (user_id, product_id, created_at) VALUES (?, ?, ?)",
+                (user.id, product_id, now_text()),
+            )
+            return True, "已收藏"
+
+    def is_favorite(self, product_id: int) -> bool:
+        user = self.require_user()
+        with self.connect() as conn:
+            row = conn.execute(
+                "SELECT 1 FROM favorites WHERE user_id = ? AND product_id = ?",
+                (user.id, product_id),
+            ).fetchone()
+            return row is not None
+
+    def get_favorites(self) -> list[dict[str, Any]]:
+        user = self.require_user()
+        with self.connect() as conn:
+            rows = conn.execute(
+                """
+                SELECT p.*, u.display_name AS seller_name
+                FROM favorites f
+                JOIN products p ON p.id = f.product_id
+                JOIN users u ON u.id = p.seller_id
+                WHERE f.user_id = ? AND p.status = 'normal'
+                ORDER BY f.created_at DESC
+                """,
+                (user.id,),
+            ).fetchall()
+            return [dict(row) for row in rows]
 
     def add_product_message(self, product_id: int, content: str) -> tuple[bool, str]:
         user = self.require_user()
