@@ -1331,6 +1331,11 @@ class MainWindow(QMainWindow):
         tools.addStretch(1)
         tools.addWidget(ticket)
         layout.addLayout(tools)
+        # 下次发车提示
+        self.next_departure_label = QLabel("")
+        self.next_departure_label.setStyleSheet("color: #C9A962; font-size: 14px; font-weight: bold; padding: 8px 16px; background: #FAFBFD; border-radius: 8px; border: 1px solid #E8ECF1;")
+        self.next_departure_label.hide()
+        layout.addWidget(self.next_departure_label)
         self.bus_table = self._table(["线路", "出发", "到达", "乘车点", "发车时间", "余座", "状态"])
         self.bus_table.itemSelectionChanged.connect(self.capture_route_selection)
         self.ticket_text = QTextEdit()
@@ -1376,6 +1381,8 @@ class MainWindow(QMainWindow):
         self.moment_category = QComboBox()
         self.moment_category.setMinimumWidth(120)
         self.moment_category.addItems(self.model.moment_categories())
+        self.moment_count_label = QLabel("")
+        self.moment_count_label.setStyleSheet("color: #6B7280; font-size: 12px;")
         refresh = set_secondary(QPushButton("刷新"))
         refresh.clicked.connect(self.refresh_moments)
         publish = set_primary(QPushButton("发布动态"))
@@ -1394,6 +1401,7 @@ class MainWindow(QMainWindow):
         self.moment_keyword.textChanged.connect(lambda: self._moment_search_timer.start())
         tools.addWidget(self.moment_category)
         tools.addWidget(self.moment_keyword)
+        tools.addWidget(self.moment_count_label)
         tools.addWidget(refresh)
         tools.addStretch(1)
         tools.addWidget(publish)
@@ -1854,7 +1862,10 @@ class MainWindow(QMainWindow):
             title = QLabel(title_text)
             title.setObjectName("cardTitle")
             title.setWordWrap(True)
-            price = QLabel(f"¥{product['price']:.2f}")
+            price_text = f"¥{product['price']:.2f}"
+            if product['price'] <= 50:
+                price_text += "  💬可议价"
+            price = QLabel(price_text)
             price.setObjectName("priceText")
             meta_text = f"{product['category']} · {product['campus']} · {product['seller_name']}"
             # 显示发布时间
@@ -2079,6 +2090,23 @@ class MainWindow(QMainWindow):
             filled_blocks = int(filled / total_seats * bar_len) if total_seats else 0
             seat_bar = "█" * filled_blocks + "░" * (bar_len - filled_blocks)
             table_rows.append([r["route_name"], r["from_campus"], r["to_campus"], r["station"], r["departure_time"], f"{r['seats_left']}  {seat_bar}", status])
+        # 下次发车提示
+        next_bus = None
+        for r in self.bus_rows:
+            try:
+                dep_time = datetime.strptime(f"{today_str} {r['departure_time']}", "%Y-%m-%d %H:%M")
+                diff = (dep_time - now).total_seconds()
+                if diff > 0 and (next_bus is None or diff < next_bus[1]):
+                    next_bus = (r, diff)
+            except (ValueError, TypeError):
+                pass
+        if next_bus:
+            r, diff = next_bus
+            mins = int(diff // 60)
+            self.next_departure_label.setText(f"🚌 下一班: {r['route_name']} {r['from_campus']}→{r['to_campus']} {r['departure_time']} (还有{mins}分钟)")
+            self.next_departure_label.show()
+        else:
+            self.next_departure_label.hide()
         self.fill_table(
             self.bus_table,
             table_rows,
@@ -2268,6 +2296,7 @@ class MainWindow(QMainWindow):
         keyword = self.moment_keyword.text().strip().lower()
         if keyword:
             self.moment_rows = [r for r in self.moment_rows if keyword in r["content"].lower() or keyword in r["display_name"].lower() or keyword in r["category"].lower()]
+        self.moment_count_label.setText(f"共 {len(self.moment_rows)} 条")
         self.moment_list.blockSignals(True)
         self.moment_list.clear()
         restore_row = 0
@@ -2744,7 +2773,14 @@ class MainWindow(QMainWindow):
         keyword = self.log_filter.text().strip().lower()
         if keyword:
             rows = [r for r in rows if keyword in r["action"].lower() or keyword in r["detail"].lower() or keyword in r["admin_name"].lower()]
+        # 操作类型图标
+        action_icons = {"封禁": "🚫", "解封": "✅", "下架": "📦", "恢复": "♻️", "取消": "❌", "导出": "📤"}
+        def _action_icon(action):
+            for kw, icon in action_icons.items():
+                if kw in action:
+                    return f"{icon} {action}"
+            return f"📋 {action}"
         self.fill_table(
             self.admin_log_table,
-            [[r["admin_name"], r["action"], r["target_type"], str(r["target_id"]), r["detail"], r["created_at"]] for r in rows],
+            [[r["admin_name"], _action_icon(r["action"]), r["target_type"], str(r["target_id"]), r["detail"], r["created_at"]] for r in rows],
         )
