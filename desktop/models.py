@@ -1231,11 +1231,16 @@ class AppModel:
                 ).fetchone()[0]
                 label = (date.today() - timedelta(days=i)).strftime("%m/%d")
                 reg_trend.append((label, count))
+            # 商品分类分布
+            cat_dist = conn.execute(
+                "SELECT category, COUNT(*) as cnt FROM products WHERE status = 'normal' GROUP BY category ORDER BY cnt DESC"
+            ).fetchall()
         return {
             "totals": totals,
             "venue_hot": [dict(row) for row in venue_hot],
             "recent_logs": [dict(row) for row in recent_logs],
             "reg_trend": reg_trend,
+            "cat_dist": [(row["category"], row["cnt"]) for row in cat_dist],
         }
 
     def admin_users(self) -> list[dict[str, Any]]:

@@ -488,6 +488,60 @@ class LineChart(QWidget):
         painter.end()
 
 
+class PieChart(QWidget):
+    """简单饼图，用于显示分类分布"""
+    _COLORS = [
+        "#3B82F6", "#10B981", "#F59E0B", "#EF4444", "#8B5CF6",
+        "#EC4899", "#14B8A6", "#6366F1", "#F97316", "#06B6D4",
+    ]
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.segments: list[tuple[str, int]] = []
+        self.setMinimumHeight(200)
+
+    def set_data(self, segments: list[tuple[str, int]]) -> None:
+        self.segments = segments
+        self.update()
+
+    def paintEvent(self, event) -> None:
+        super().paintEvent(event)
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.Antialiasing)
+        if not self.segments:
+            painter.setPen(QColor("#6C757D"))
+            painter.setFont(QFont("Microsoft YaHei", 12))
+            painter.drawText(self.rect(), Qt.AlignCenter, "暂无数据")
+            painter.end()
+            return
+        total = sum(v for _, v in self.segments) or 1
+        # 饼图区域（左侧）
+        pie_size = min(self.width() * 0.55, self.height() - 20)
+        pie_rect = QRectF(10, (self.height() - pie_size) / 2, pie_size, pie_size)
+        start_angle = 90 * 16  # 从12点方向开始
+        for i, (label, value) in enumerate(self.segments):
+            span = int(value / total * 360 * 16)
+            color = QColor(self._COLORS[i % len(self._COLORS)])
+            painter.setBrush(color)
+            painter.setPen(QColor("#FFFFFF"))
+            painter.drawPie(pie_rect, start_angle, -span)
+            start_angle -= span
+        # 图例（右侧）
+        legend_x = pie_rect.right() + 20
+        legend_y = (self.height() - len(self.segments) * 28) / 2
+        painter.setFont(QFont("Microsoft YaHei", 10))
+        for i, (label, value) in enumerate(self.segments):
+            color = QColor(self._COLORS[i % len(self._COLORS)])
+            y = legend_y + i * 28
+            painter.setBrush(color)
+            painter.setPen(Qt.NoPen)
+            painter.drawRoundedRect(legend_x, y, 14, 14, 3, 3)
+            painter.setPen(QColor("#1A1A2E"))
+            pct = value / total * 100
+            painter.drawText(int(legend_x + 22), int(y + 12), f"{label} ({value}, {pct:.0f}%)")
+        painter.end()
+
+
 class FormDialog(QDialog):
     """通用表单对话框：接受字段配置列表，自动生成表单。
 
@@ -1455,6 +1509,9 @@ class MainWindow(QMainWindow):
         bottom.addWidget(self._text_card("最近管理操作", self.admin_recent_logs), 1)
         layout.addLayout(bottom, 1)
         # 用户注册趋势图
+        # 趋势图 + 饼图（左右布局）
+        charts_row = QHBoxLayout()
+        charts_row.setSpacing(16)
         trend_card = card_frame()
         trend_layout = QVBoxLayout(trend_card)
         trend_title = QLabel("近7天用户注册趋势")
@@ -1462,7 +1519,16 @@ class MainWindow(QMainWindow):
         self.admin_trend_chart = LineChart()
         trend_layout.addWidget(trend_title)
         trend_layout.addWidget(self.admin_trend_chart)
-        layout.addWidget(trend_card, 1)
+        charts_row.addWidget(trend_card, 1)
+        pie_card = card_frame()
+        pie_layout = QVBoxLayout(pie_card)
+        pie_title = QLabel("商品分类分布")
+        pie_title.setObjectName("sectionTitle")
+        self.admin_pie_chart = PieChart()
+        pie_layout.addWidget(pie_title)
+        pie_layout.addWidget(self.admin_pie_chart)
+        charts_row.addWidget(pie_card, 1)
+        layout.addLayout(charts_row, 1)
         return page
 
     def _build_admin_users(self) -> QWidget:
@@ -2369,6 +2435,7 @@ class MainWindow(QMainWindow):
             logs_html = '<div style="color:#9CA3AF; padding:20px; text-align:center;">暂无操作日志</div>'
         self.admin_recent_logs.setHtml(logs_html)
         self.admin_trend_chart.set_data(summary.get("reg_trend", []))
+        self.admin_pie_chart.set_data(summary.get("cat_dist", []))
 
     def capture_admin_selection(self, key: str, rows: list[dict], table: QTableWidget) -> None:
         row = table.currentRow()
