@@ -166,13 +166,16 @@ def product_pixmap(image_path: str | None, width: int, height: int, category: st
                 return pixmap.scaled(width, height, Qt.KeepAspectRatioByExpanding, Qt.SmoothTransformation)
     # 根据标题关键词匹配具体商品图片
     title_keywords = {
-        "平板": "prod_tablet.jpg", "支架": "prod_tablet.jpg",
-        "键盘": "prod_keyboard.jpg", "机械": "prod_keyboard.jpg",
-        "台灯": "prod_desklamp.jpg", "灯": "prod_light.jpg",
-        "笔记": "prod_notebook.jpg", "课程": "prod_notebook.jpg",
-        "教材": "prod_book.jpg", "数学": "prod_book.jpg", "单词": "prod_book.jpg",
-        "羽毛球": "prod_shuttle.jpg", "球": "prod_shuttle.jpg",
-        "摄影": "prod_light.jpg", "灯光": "prod_light.jpg",
+        "平板": "prod_tablet.jpg", "支架": "prod_tablet.jpg", "iPad": "prod_tablet.jpg", "手机": "prod_tablet.jpg",
+        "键盘": "prod_keyboard.jpg", "机械": "prod_keyboard.jpg", "鼠标": "prod_keyboard.jpg", "耳机": "prod_keyboard.jpg",
+        "台灯": "prod_desklamp.jpg", "灯": "prod_light.jpg", "充电": "prod_keyboard.jpg", "电源": "prod_keyboard.jpg",
+        "笔记": "prod_notebook.jpg", "课程": "prod_notebook.jpg", "笔记": "prod_notebook.jpg", "考研": "prod_notebook.jpg",
+        "教材": "prod_book.jpg", "数学": "prod_book.jpg", "单词": "prod_book.jpg", "英语": "prod_book.jpg",
+        "四六级": "prod_book.jpg", "高数": "prod_book.jpg", "物理": "prod_book.jpg", "编程": "prod_book.jpg",
+        "羽毛球": "prod_shuttle.jpg", "球": "prod_shuttle.jpg", "篮球": "prod_shuttle.jpg", "足球": "prod_shuttle.jpg",
+        "拍": "prod_shuttle.jpg", "运动": "prod_shuttle.jpg", "健身": "prod_shuttle.jpg",
+        "摄影": "prod_light.jpg", "灯光": "prod_light.jpg", "相机": "prod_light.jpg", "镜头": "prod_light.jpg",
+        "衣服": "prod_desklamp.jpg", "鞋": "prod_desklamp.jpg", "包": "prod_desklamp.jpg",
     }
     # 也按分类做兜底匹配
     cat_keywords = {
@@ -850,11 +853,26 @@ class MainWindow(QMainWindow):
         self.auth_page.notify.connect(self.show_toast)
         self.root_stack.addWidget(self.auth_page)
         self.setCentralWidget(self.root_stack)
+        self._setup_shortcuts()
 
     def apply_theme(self) -> None:
         qss_path = RESOURCE_ROOT / "desktop" / "style.qss"
         if qss_path.exists():
             self.setStyleSheet(qss_path.read_text(encoding="utf-8"))
+
+    def _setup_shortcuts(self) -> None:
+        from PySide6.QtGui import QShortcut, QKeySequence
+        QShortcut(QKeySequence("Ctrl+R"), self, self._shortcut_refresh)
+        QShortcut(QKeySequence("Ctrl+Q"), self, self.close)
+        QShortcut(QKeySequence("F5"), self, self._shortcut_refresh)
+
+    def _shortcut_refresh(self) -> None:
+        if self.user_nav and self.user_nav.isVisible():
+            self.refresh_user_all()
+            self.show_toast("已刷新", True)
+        elif self.admin_nav and self.admin_nav.isVisible():
+            self.refresh_admin_all()
+            self.show_toast("已刷新", True)
 
     def show_toast(self, message: str, success: bool = True) -> None:
         toast = Toast(self, message, success)
@@ -1366,9 +1384,18 @@ class MainWindow(QMainWindow):
 
     def _build_admin_logs(self) -> QWidget:
         page, layout = self._content_page("操作日志", "所有后台关键操作均保留记录。")
+        tools = QHBoxLayout()
+        tools.setSpacing(12)
+        self.log_filter = QLineEdit()
+        self.log_filter.setPlaceholderText("搜索操作日志...")
+        self.log_filter.setMinimumWidth(200)
+        self.log_filter.returnPressed.connect(self.refresh_admin_logs)
         refresh = set_secondary(QPushButton("刷新"))
         refresh.clicked.connect(self.refresh_admin_logs)
-        layout.addWidget(refresh, 0, Qt.AlignRight)
+        tools.addWidget(self.log_filter, 1)
+        tools.addStretch(1)
+        tools.addWidget(refresh)
+        layout.addLayout(tools)
         self.admin_log_table = self._table(["管理员", "操作", "对象", "对象ID", "详情", "时间"])
         layout.addWidget(self.admin_log_table, 1)
         return page
@@ -1384,6 +1411,7 @@ class MainWindow(QMainWindow):
         table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
         table.setShowGrid(False)
         table.setFrameStyle(QFrame.NoFrame)
+        table.setSortingEnabled(True)
         return table
 
     def fill_table(self, table: QTableWidget, rows: list[list[str]], status_column: int | None = None, seat_column: int | None = None) -> None:
@@ -2261,6 +2289,9 @@ class MainWindow(QMainWindow):
 
     def refresh_admin_logs(self) -> None:
         rows = self.model.admin_logs()
+        keyword = self.log_filter.text().strip().lower()
+        if keyword:
+            rows = [r for r in rows if keyword in r["action"].lower() or keyword in r["detail"].lower() or keyword in r["admin_name"].lower()]
         self.fill_table(
             self.admin_log_table,
             [[r["admin_name"], r["action"], r["target_type"], str(r["target_id"]), r["detail"], r["created_at"]] for r in rows],
