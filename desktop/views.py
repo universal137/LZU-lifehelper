@@ -870,9 +870,18 @@ class MainWindow(QMainWindow):
         self._setup_shortcuts()
 
     def apply_theme(self) -> None:
+        self._dark_mode = False
         qss_path = RESOURCE_ROOT / "desktop" / "style.qss"
         if qss_path.exists():
             self.setStyleSheet(qss_path.read_text(encoding="utf-8"))
+
+    def toggle_theme(self) -> None:
+        self._dark_mode = not self._dark_mode
+        theme = "style_dark.qss" if self._dark_mode else "style.qss"
+        qss_path = RESOURCE_ROOT / "desktop" / theme
+        if qss_path.exists():
+            self.setStyleSheet(qss_path.read_text(encoding="utf-8"))
+        self.show_toast("🌙 暗色模式" if self._dark_mode else "☀️ 亮色模式", True)
 
     def _setup_shortcuts(self) -> None:
         from PySide6.QtGui import QShortcut, QKeySequence
@@ -999,6 +1008,11 @@ class MainWindow(QMainWindow):
         layout.addWidget(nav, 1)
         layout.addSpacing(10)
         layout.addWidget(logout)
+        theme_btn = QPushButton("🌙 暗色模式")
+        theme_btn.setStyleSheet("color: rgba(255,255,255,0.5); background: transparent; border: none; font-size: 12px;")
+        theme_btn.setCursor(Qt.PointingHandCursor)
+        theme_btn.clicked.connect(self.toggle_theme)
+        layout.addWidget(theme_btn, 0, Qt.AlignCenter)
         about_btn = QPushButton("ℹ 关于")
         about_btn.setStyleSheet("color: rgba(255,255,255,0.5); background: transparent; border: none; font-size: 12px;")
         about_btn.setCursor(Qt.PointingHandCursor)
