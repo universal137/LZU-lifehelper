@@ -383,10 +383,14 @@ class BarChart(QWidget):
             painter.setBrush(grad)
             painter.setPen(Qt.NoPen)
             painter.drawRoundedRect(bar_rect, 5, 5)
-            # 数值标签
-            painter.setPen(QColor("#212529"))
-            painter.setFont(QFont("Microsoft YaHei", 10, QFont.Bold))
-            painter.drawText(QRectF(x, y - 26, bar_width, 20), Qt.AlignCenter, str(value))
+            # 数值标签（带背景圆角）
+            label_bg = QRectF(x + (bar_width - 36) / 2, y - 30, 36, 20)
+            painter.setBrush(QColor("#FFFFFF"))
+            painter.setPen(QColor("#E8ECF1"))
+            painter.drawRoundedRect(label_bg, 4, 4)
+            painter.setPen(QColor("#1A1A2E"))
+            painter.setFont(QFont("Microsoft YaHei", 9, QFont.Bold))
+            painter.drawText(label_bg, Qt.AlignCenter, str(value))
             # 名称标签（省略号截断）
             painter.setPen(QColor("#6C757D"))
             painter.setFont(QFont("Microsoft YaHei", 8))
@@ -426,6 +430,15 @@ class FormDialog(QDialog):
             elif f["type"] == "textedit":
                 w = QTextEdit()
                 w.setMinimumHeight(f.get("min_height", 100))
+                max_len = f.get("max_length", 2000)
+                counter = QLabel(f"0 / {max_len}")
+                counter.setObjectName("mutedText")
+                counter.setStyleSheet("color: #9CA3AF; font-size: 11px; padding-right: 4px;")
+                w.textChanged.connect(lambda text=w, lbl=counter, ml=max_len: lbl.setText(f"{len(text)} / {ml}"))
+                layout.addRow(f["label"], w)
+                layout.addRow("", counter)
+                self.fields_widgets[name] = w
+                continue
             elif f["type"] == "image":
                 img_label = QLabel("未选择图片")
                 pick_btn = set_secondary(QPushButton(f.get("button_text", "选择图片")))
@@ -1016,9 +1029,12 @@ class MainWindow(QMainWindow):
         cards = QHBoxLayout()
         self.user_kpi_labels: dict[str, QLabel] = {}
         kpi_colors = {"products": "blue", "bookings": "green", "tickets": "orange", "activities": "purple"}
+        kpi_nav = {"products": 1, "bookings": 2, "tickets": 3, "activities": 4}
         for key, title in [("products", "🛍 在售商品"), ("bookings", "📋 我的预约"), ("tickets", "🎫 校车票"), ("activities", "🎉 已报名活动")]:
             card = card_frame()
             card.setProperty("kpiColor", kpi_colors.get(key, "blue"))
+            card.setCursor(Qt.PointingHandCursor)
+            card.mousePressEvent = lambda _e, idx=kpi_nav.get(key, 0): self.user_pages.animated_switch(idx)
             c = QVBoxLayout(card)
             t = QLabel(title)
             t.setObjectName("kpiTitle")
@@ -1124,7 +1140,7 @@ class MainWindow(QMainWindow):
         tools.addStretch(1)
         tools.addWidget(ticket)
         layout.addLayout(tools)
-        self.bus_table = self._table(["线路", "出发", "到达", "乘车点", "发车时间", "余座"])
+        self.bus_table = self._table(["线路", "出发", "到达", "乘车点", "发车时间", "余座", "状态"])
         self.bus_table.itemSelectionChanged.connect(self.capture_route_selection)
         self.ticket_text = QTextEdit()
         self.ticket_text.setReadOnly(True)
@@ -1716,9 +1732,28 @@ class MainWindow(QMainWindow):
 
     def refresh_buses(self) -> None:
         self.bus_rows = self.model.list_shuttle_routes(self.bus_campus.currentText())
+        now = datetime.now()
+        today_str = now.strftime("%Y-%m-%d")
+        table_rows = []
+        for r in self.bus_rows:
+            status = ""
+            try:
+                dep_time = datetime.strptime(f"{today_str} {r['departure_time']}", "%Y-%m-%d %H:%M")
+                diff = (dep_time - now).total_seconds()
+                if diff < 0:
+                    status = "已发车"
+                elif diff < 600:
+                    status = f"⏳ {int(diff // 60)}分钟后"
+                elif diff < 3600:
+                    status = f"🕐 {int(diff // 60)}分钟后"
+                else:
+                    status = f"🕐 {int(diff // 3600)}小时后"
+            except (ValueError, TypeError):
+                status = r["departure_time"]
+            table_rows.append([r["route_name"], r["from_campus"], r["to_campus"], r["station"], r["departure_time"], str(r["seats_left"]), status])
         self.fill_table(
             self.bus_table,
-            [[r["route_name"], r["from_campus"], r["to_campus"], r["station"], r["departure_time"], str(r["seats_left"])] for r in self.bus_rows],
+            table_rows,
             seat_column=5,
         )
         # 为校车表格第一列添加巴士图标（缓存）
