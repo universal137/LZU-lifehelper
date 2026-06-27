@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 import hashlib
+import logging
 import os
 import shutil
 import sqlite3
@@ -24,6 +25,7 @@ IMAGE_DIR = DATA_DIR / "images"
 EXPORT_DIR = DATA_DIR / "exports"
 DB_PATH = DATA_DIR / "lzu_lifehelper.db"
 SCHEMA_VERSION = 3
+logger = logging.getLogger("lzu_lifehelper.models")
 
 # 增量迁移：{目标版本: [SQL语句列表]}
 MIGRATIONS: dict[int, list[str]] = {
@@ -527,6 +529,7 @@ class AppModel:
             college=row["college"],
             avatar_color=row["avatar_color"],
         )
+        logger.info("用户登录成功: %s (%s)", username, row["role"])
         return True, "登录成功"
 
     def register_user(self, username: str, display_name: str, password: str, role: str, college: str) -> tuple[bool, str]:
@@ -668,6 +671,7 @@ class AppModel:
                 """,
                 (title, category, campus, price_value, description, self.copy_image(image_path), user.id, now_text()),
             )
+        logger.info("商品发布: %s by user %d", title, user.id)
         return True, "商品发布成功"
 
     def get_product(self, product_id: int) -> dict[str, Any] | None:
@@ -782,6 +786,7 @@ class AppModel:
                 (slot_id, user.id, now_text(), now_text()),
             )
             conn.execute("COMMIT")
+            logger.info("场馆预约: slot_id=%d by user %d", slot_id, user.id)
             return True, "预约成功"
         except sqlite3.Error:
             conn.execute("ROLLBACK")
@@ -867,6 +872,7 @@ class AppModel:
                 (route_id, user.id, today_text(), now_text()),
             )
             conn.execute("COMMIT")
+        logger.info("校车购票: route_id=%d by user %d", route_id, user.id)
         return True, "校车票预订成功"
 
     def list_my_tickets(self) -> list[dict[str, Any]]:
@@ -1245,6 +1251,7 @@ class AppModel:
         action = "解封用户" if status == "active" else "封禁用户"
         suffix = f"；原因：{reason}" if reason else ""
         self.log_admin(action, "user", user_id, f"{action}: {row['display_name']}{suffix}")
+        logger.info("管理操作: %s user_id=%d by admin %d", action, user_id, admin.id)
         return True, f"{action}成功"
 
     def admin_products(self) -> list[dict[str, Any]]:

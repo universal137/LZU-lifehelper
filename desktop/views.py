@@ -1390,9 +1390,12 @@ class MainWindow(QMainWindow):
         if not rows:
             table.setRowCount(1)
             table.setSpan(0, 0, 1, table.columnCount())
-            empty_item = QTableWidgetItem("暂无数据")
+            empty_item = QTableWidgetItem("📭 暂无数据")
             empty_item.setTextAlignment(Qt.AlignCenter)
             empty_item.setForeground(QColor("#9CA3AF"))
+            font = empty_item.font()
+            font.setPointSize(12)
+            empty_item.setFont(font)
             table.setItem(0, 0, empty_item)
             return
         table.setRowCount(len(rows))
@@ -1834,12 +1837,21 @@ class MainWindow(QMainWindow):
         for idx, row in enumerate(self.moment_rows):
             item = QListWidgetItem(f"[{row['category']}] {row['display_name']}  {row['created_at']}\n♥ {row['like_count']}   评论 {row['comment_count']}\n{row['content'][:70]}")
             item.setData(Qt.UserRole, row["id"])
-            img_file = MOMENT_CATEGORY_IMAGES.get(row["category"], "")
-            if img_file:
-                img_path = ASSETS_DIR / img_file
-                if img_path.exists():
-                    pix = QPixmap(str(img_path)).scaled(48, 48, Qt.KeepAspectRatioByExpanding, Qt.SmoothTransformation)
-                    item.setIcon(pix)
+            # 分类图标缓存
+            if not hasattr(self, "_moment_icon_cache"):
+                self._moment_icon_cache: dict[str, QPixmap] = {}
+            cat = row["category"]
+            if cat not in self._moment_icon_cache:
+                img_file = MOMENT_CATEGORY_IMAGES.get(cat, "")
+                if img_file:
+                    img_path = ASSETS_DIR / img_file
+                    if img_path.exists():
+                        self._moment_icon_cache[cat] = QPixmap(str(img_path)).scaled(48, 48, Qt.KeepAspectRatioByExpanding, Qt.SmoothTransformation)
+                if cat not in self._moment_icon_cache:
+                    self._moment_icon_cache[cat] = QPixmap()  # 空占位
+            icon = self._moment_icon_cache[cat]
+            if not icon.isNull():
+                item.setIcon(icon)
             self.moment_list.addItem(item)
             if prev_id is not None and row["id"] == prev_id:
                 restore_row = idx
@@ -1849,6 +1861,9 @@ class MainWindow(QMainWindow):
         if self.moment_rows:
             self.open_moment_detail()
         else:
+            self.moment_list.addItem(QListWidgetItem("📭 暂无动态，快来发布第一条吧"))
+            self.current_moment_id = None
+            self.moment_detail.setHtml('<div style="color:#9CA3AF;padding:40px;text-align:center;">选择左侧动态查看详情</div>')
             self.current_moment_id = None
             self.moment_detail.clear()
 
