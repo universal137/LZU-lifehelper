@@ -1236,6 +1236,24 @@ class AppModel:
             conn.execute("UPDATE users SET password_hash = ? WHERE id = ?", (hash_password(new_password), user.id))
         return True, "密码修改成功"
 
+    def update_profile(self, display_name: str, college: str, bio: str) -> tuple[bool, str]:
+        user = self.require_user()
+        if not display_name:
+            return False, "姓名不能为空"
+        if len(display_name) > 20:
+            return False, "姓名不能超过20个字符"
+        if len(college) > 50:
+            return False, "学院/单位不能超过50个字符"
+        if len(bio) > 200:
+            return False, "个人简介不能超过200个字符"
+        with self.connect() as conn:
+            conn.execute(
+                "UPDATE users SET display_name = ?, college = ?, bio = ? WHERE id = ?",
+                (display_name, college, bio, user.id),
+            )
+        logger.info("用户资料更新: user_id=%d", user.id)
+        return True, "资料更新成功"
+
     def admin_summary(self) -> dict[str, Any]:
         self.require_admin()
         with self.connect() as conn:

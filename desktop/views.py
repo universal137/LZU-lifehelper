@@ -1148,6 +1148,21 @@ class MainWindow(QMainWindow):
         layout.addSpacing(10)
         layout.addWidget(nav, 1)
         layout.addSpacing(10)
+        # 管理员通知面板
+        if admin:
+            noti_card = card_frame()
+            noti_card.setStyleSheet("background: rgba(201,169,98,0.1); border: 1px solid rgba(201,169,98,0.3); border-radius: 10px; padding: 10px;")
+            noti_layout = QVBoxLayout(noti_card)
+            noti_layout.setSpacing(4)
+            noti_title = QLabel("🔔 待处理")
+            noti_title.setStyleSheet("color: #C9A962; font-size: 12px; font-weight: bold; border: none; background: transparent;")
+            noti_layout.addWidget(noti_title)
+            self.admin_noti_text = QLabel("加载中...")
+            self.admin_noti_text.setStyleSheet("color: rgba(255,255,255,0.7); font-size: 11px; border: none; background: transparent;")
+            self.admin_noti_text.setWordWrap(True)
+            noti_layout.addWidget(self.admin_noti_text)
+            layout.addWidget(noti_card)
+            layout.addSpacing(6)
         layout.addWidget(logout)
         theme_btn = QPushButton("🌙 暗色模式")
         theme_btn.setStyleSheet("color: rgba(255,255,255,0.5); background: transparent; border: none; font-size: 12px;")
@@ -1338,6 +1353,8 @@ class MainWindow(QMainWindow):
         self.bus_campus = QComboBox()
         self.bus_campus.setMinimumWidth(120)
         self.bus_campus.addItems(["全部", "榆中校区", "城关校区"])
+        self.bus_summary_label = QLabel("")
+        self.bus_summary_label.setStyleSheet("color: #6B7280; font-size: 12px;")
         refresh = set_secondary(QPushButton("刷新"))
         refresh.clicked.connect(self.refresh_buses)
         ticket = set_primary(QPushButton("一键购票"))
@@ -1356,6 +1373,7 @@ class MainWindow(QMainWindow):
         self.bus_table.itemSelectionChanged.connect(self.capture_route_selection)
         self.ticket_text = QTextEdit()
         self.ticket_text.setReadOnly(True)
+        layout.addWidget(self.bus_summary_label)
         layout.addWidget(self.bus_table, 2)
         layout.addWidget(self._text_card("我的车票", self.ticket_text), 1)
         return page
@@ -1457,6 +1475,9 @@ class MainWindow(QMainWindow):
         avatar_info.addWidget(name_label)
         avatar_info.addWidget(role_label)
         avatar_info.addStretch(1)
+        edit_btn = set_secondary(QPushButton("编辑资料"))
+        edit_btn.clicked.connect(self.edit_profile)
+        avatar_info.addWidget(edit_btn)
         avatar_row.addLayout(avatar_info, 1)
         layout.addLayout(avatar_row)
         split = QHBoxLayout()
@@ -1982,6 +2003,18 @@ class MainWindow(QMainWindow):
             )
             box = dialog.add_section("同类推荐", "", 80)
             box.setHtml(similar_html)
+        # 卖家的其他商品
+        seller_products = [p for p in self.model.list_products() if p["seller_id"] == detail["seller_id"] and p["id"] != product_id][:3]
+        if seller_products:
+            seller_html = "".join(
+                f'<div style="border-bottom:1px solid #E8ECF1; padding:6px 0;">'
+                f'<b style="color:#1A1A2E;">{esc(p["title"])}</b> '
+                f'<span style="color:#E74C3C;">¥{p["price"]:.0f}</span> '
+                f'<span style="color:#9CA3AF; font-size:12px;">{esc(p["category"])}</span></div>'
+                for p in seller_products
+            )
+            box = dialog.add_section(f"卖家的其他商品", "", 80)
+            box.setHtml(seller_html)
         if detail["messages"]:
             messages_html = "".join(
                 f'<div style="border-bottom:1px solid #E8ECF1; padding:8px 0;">'
@@ -2155,6 +2188,10 @@ class MainWindow(QMainWindow):
             self.next_departure_label.show()
         else:
             self.next_departure_label.hide()
+        # 线路统计
+        total_routes = len(self.bus_rows)
+        total_seats = sum(r["seats_left"] for r in self.bus_rows)
+        self.bus_summary_label.setText(f"共 {total_routes} 条线路 · 总余座 {total_seats}")
         self.fill_table(
             self.bus_table,
             table_rows,
@@ -2627,6 +2664,32 @@ class MainWindow(QMainWindow):
             self.new_password.clear()
             self.confirm_password.clear()
 
+    def edit_profile(self) -> None:
+        user = self.model.require_user()
+        dialog = QDialog(self)
+        dialog.setWindowTitle("编辑个人资料")
+        dialog.resize(400, 300)
+        layout = QFormLayout(dialog)
+        layout.setSpacing(16)
+        layout.setContentsMargins(30, 30, 30, 30)
+        name_input = QLineEdit(user.display_name)
+        college_input = QLineEdit(user.college)
+        bio_input = QTextEdit()
+        bio_input.setMinimumHeight(80)
+        layout.addRow("显示姓名", name_input)
+        layout.addRow("学院/单位", college_input)
+        layout.addRow("个人简介", bio_input)
+        def save():
+            ok, msg = self.model.update_profile(name_input.text().strip(), college_input.text().strip(), bio_input.toPlainText().strip())
+            self.show_toast(msg, ok)
+            if ok:
+                dialog.accept()
+                self.refresh_profile()
+        submit = set_primary(QPushButton("保存"))
+        submit.clicked.connect(save)
+        layout.addRow(submit)
+        dialog.exec()
+
     def refresh_admin_all(self) -> None:
         self.refresh_admin_overview()
         self.refresh_admin_users()
@@ -2635,6 +2698,37 @@ class MainWindow(QMainWindow):
         self.refresh_admin_activities()
         self.refresh_admin_moments()
         self.refresh_admin_logs()
+        self._update_admin_notifications()
+
+    def _update_admin_notifications(self) -> None:
+        """更新管理通知面板"""
+        if not hasattr(self, "admin_noti_text"):
+            return
+        summary = self.model.admin_summary()
+        notis = []
+        if summary["totals"].get("users", 0) > 100:
+            notis.append(f"👥 用户数已达 {summary['totals']['users']}")
+        if summary["totals"].get("products", 0) > 50:
+            notis.append(f"📦 商品数已达 {summary['totals']['products']}")
+        # 检查即将开始的活动
+        activities = self.model.list_activities()
+        from datetime import datetime as _dt
+        now = _dt.now()
+        upcoming = []
+        for a in activities:
+            try:
+                t = _dt.strptime(a["start_time"], "%Y-%m-%d %H:%M")
+                diff = (t - now).total_seconds()
+                if 0 < diff < 3600:
+                    upcoming.append(a["title"])
+            except (ValueError, TypeError):
+                pass
+        if upcoming:
+            notis.append(f"🎉 {len(upcoming)}个活动即将开始")
+        if notis:
+            self.admin_noti_text.setText("\n".join(notis))
+        else:
+            self.admin_noti_text.setText("✅ 暂无待处理事项")
 
     def refresh_admin_overview(self) -> None:
         summary = self.model.admin_summary()
