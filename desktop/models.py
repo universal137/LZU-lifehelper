@@ -1235,12 +1235,26 @@ class AppModel:
             cat_dist = conn.execute(
                 "SELECT category, COUNT(*) as cnt FROM products WHERE status = 'normal' GROUP BY category ORDER BY cnt DESC"
             ).fetchall()
+            # 近7天预约趋势
+            booking_trend = []
+            for i in range(6, -1, -1):
+                day = (date.today() - timedelta(days=i)).strftime("%Y-%m-%d")
+                count = conn.execute(
+                    """
+                    SELECT COUNT(*) FROM bookings b JOIN venue_slots s ON s.id = b.slot_id
+                    WHERE s.slot_date = ? AND b.status = 'active'
+                    """,
+                    (day,),
+                ).fetchone()[0]
+                label = (date.today() - timedelta(days=i)).strftime("%m/%d")
+                booking_trend.append((label, count))
         return {
             "totals": totals,
             "venue_hot": [dict(row) for row in venue_hot],
             "recent_logs": [dict(row) for row in recent_logs],
             "reg_trend": reg_trend,
             "cat_dist": [(row["category"], row["cnt"]) for row in cat_dist],
+            "booking_trend": booking_trend,
         }
 
     def admin_users(self) -> list[dict[str, Any]]:

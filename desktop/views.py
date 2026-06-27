@@ -1529,6 +1529,15 @@ class MainWindow(QMainWindow):
         pie_layout.addWidget(self.admin_pie_chart)
         charts_row.addWidget(pie_card, 1)
         layout.addLayout(charts_row, 1)
+        # 预约趋势图
+        booking_trend_card = card_frame()
+        booking_trend_layout = QVBoxLayout(booking_trend_card)
+        booking_trend_title = QLabel("近7天预约趋势")
+        booking_trend_title.setObjectName("sectionTitle")
+        self.admin_booking_trend = LineChart()
+        booking_trend_layout.addWidget(booking_trend_title)
+        booking_trend_layout.addWidget(self.admin_booking_trend)
+        layout.addWidget(booking_trend_card, 1)
         return page
 
     def _build_admin_users(self) -> QWidget:
@@ -2436,6 +2445,7 @@ class MainWindow(QMainWindow):
         self.admin_recent_logs.setHtml(logs_html)
         self.admin_trend_chart.set_data(summary.get("reg_trend", []))
         self.admin_pie_chart.set_data(summary.get("cat_dist", []))
+        self.admin_booking_trend.set_data(summary.get("booking_trend", []))
 
     def capture_admin_selection(self, key: str, rows: list[dict], table: QTableWidget) -> None:
         row = table.currentRow()
