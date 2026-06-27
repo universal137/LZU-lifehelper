@@ -29,20 +29,17 @@ QLineEdit, QTextEdit, QComboBox {
     selection-background-color: rgba(201, 169, 98, 0.3);
     font-size: 14px;
     color: #1A1A2E;
-    letter-spacing: 0.5px;
 }
 
 QLineEdit:focus, QTextEdit:focus, QComboBox:focus {
     border: 2px solid #C9A962;
     background-color: #FFFFFF;
-    box-shadow: 0 0 0 3px rgba(201, 169, 98, 0.15);
 }
 
 QTextEdit[readOnly="true"] {
     border: 1px solid #E8ECF1;
     background-color: #FAFBFD;
     padding: 12px;
-    line-height: 1.6;
 }
 
 QComboBox::drop-down {
@@ -62,7 +59,6 @@ QPushButton {
     border: 2px solid #E8ECF1;
     font-size: 13px;
     min-height: 16px;
-    letter-spacing: 0.5px;
 }
 
 QPushButton:hover {
@@ -82,18 +78,14 @@ QPushButton#primaryBtn {
     color: #FFFFFF;
     border: none;
     font-weight: bold;
-    letter-spacing: 1px;
-    box-shadow: 0 4px 12px rgba(201, 169, 98, 0.4);
 }
 
 QPushButton#primaryBtn:hover {
     background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #D4B56E, stop:1 #C9A962);
-    box-shadow: 0 6px 16px rgba(201, 169, 98, 0.5);
 }
 
 QPushButton#primaryBtn:pressed {
     background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #B8942F, stop:1 #A8852A);
-    box-shadow: 0 2px 6px rgba(201, 169, 98, 0.3);
 }
 
 /* 危险按钮 - 渐变红 */
@@ -102,18 +94,14 @@ QPushButton#dangerBtn {
     color: #FFFFFF;
     border: none;
     font-weight: bold;
-    letter-spacing: 1px;
-    box-shadow: 0 4px 12px rgba(231, 76, 60, 0.4);
 }
 
 QPushButton#dangerBtn:hover {
     background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #EC7063, stop:1 #E74C3C);
-    box-shadow: 0 6px 16px rgba(231, 76, 60, 0.5);
 }
 
 QPushButton#dangerBtn:pressed {
     background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #C0392B, stop:1 #A93226);
-    box-shadow: 0 2px 6px rgba(231, 76, 60, 0.3);
 }
 
 /* 次要按钮 - 透明边框 */
@@ -122,7 +110,6 @@ QPushButton#secondaryBtn {
     color: #C9A962;
     border: 2px solid #C9A962;
     font-weight: bold;
-    letter-spacing: 0.5px;
 }
 
 QPushButton#secondaryBtn:hover {
@@ -156,7 +143,6 @@ QTableWidget {
     alternate-background-color: #FAFBFD;
     font-size: 13px;
     selection-background-color: rgba(201, 169, 98, 0.25);
-    show-grid: false;
     outline: none;
 }
 
@@ -183,7 +169,6 @@ QHeaderView::section {
     border: none;
     border-bottom: 2px solid #C9A962;
     font-size: 13px;
-    letter-spacing: 1px;
 }
 
 QHeaderView::section:hover {
@@ -233,8 +218,6 @@ QLabel#loginLogo {
     padding: 18px 28px;
     font-size: 26pt;
     font-weight: bold;
-    letter-spacing: 4px;
-    box-shadow: 0 8px 24px rgba(201, 169, 98, 0.4);
 }
 
 QLabel#loginHeroTitle {
@@ -242,15 +225,11 @@ QLabel#loginHeroTitle {
     font-size: 36pt;
     font-weight: bold;
     margin-bottom: 16px;
-    letter-spacing: 3px;
-    text-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
 }
 
 QLabel#loginHeroSubtitle {
     color: rgba(255, 255, 255, 0.9);
     font-size: 15pt;
-    line-height: 1.9;
-    letter-spacing: 1px;
 }
 
 QWidget#loginFormWrap {
@@ -305,8 +284,6 @@ QLabel#sidebarBrand {
     font-size: 24pt;
     font-weight: bold;
     margin-bottom: 20px;
-    letter-spacing: 4px;
-    text-shadow: 0 2px 6px rgba(201, 169, 98, 0.3);
 }
 
 QLabel#sidebarUser {
@@ -316,8 +293,6 @@ QLabel#sidebarUser {
     border-radius: 14px;
     padding: 18px;
     font-size: 13px;
-    line-height: 1.6;
-    letter-spacing: 0.5px;
 }
 
 QListWidget#navList {
@@ -334,7 +309,6 @@ QListWidget#navList::item {
     color: rgba(255, 255, 255, 0.85);
     font-size: 15px;
     border-left: 4px solid transparent;
-    letter-spacing: 1px;
 }
 
 QListWidget#navList::item:hover {
@@ -348,7 +322,6 @@ QListWidget#navList::item:selected {
     color: #C9A962;
     font-weight: bold;
     border-left: 4px solid #C9A962;
-    text-shadow: 0 1px 4px rgba(201, 169, 98, 0.3);
 }
 
 /* ========================================
@@ -358,15 +331,12 @@ QLabel#kpiTitle {
     color: #6B7280;
     font-size: 11pt;
     font-weight: bold;
-    letter-spacing: 1px;
-    text-transform: uppercase;
 }
 
 QLabel#kpiValue {
     color: #C9A962;
     font-size: 32pt;
     font-weight: bold;
-    letter-spacing: 2px;
 }
 
 /* KPI卡片彩色装饰条 */
@@ -439,12 +409,10 @@ QListWidget#momentList::item {
     padding: 18px 18px 18px 60px;
     margin: 0 0 12px 0;
     font-size: 14px;
-    line-height: 1.5;
 }
 
 QListWidget#momentList::item:hover {
     border-color: #C9A962;
-    box-shadow: 0 6px 16px rgba(201, 169, 98, 0.18);
 }
 
 QListWidget#momentList::item:selected {
@@ -462,7 +430,6 @@ QLabel#statusBadge {
     padding: 5px 14px;
     font-size: 11pt;
     font-weight: bold;
-    letter-spacing: 1px;
     min-width: 60px;
     text-align: center;
 }
@@ -492,7 +459,6 @@ QFrame#toast {
     background-color: #FFFFFF;
     border: 1px solid #E8ECF1;
     border-radius: 14px;
-    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.18);
 }
 
 QLabel#toastIcon {
@@ -509,19 +475,16 @@ QLabel#toastIcon {
 
 QLabel#toastIcon[tone="success"] {
     background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #27AE60, stop:1 #219A52);
-    box-shadow: 0 4px 12px rgba(39, 174, 96, 0.4);
 }
 
 QLabel#toastIcon[tone="danger"] {
     background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #E74C3C, stop:1 #C0392B);
-    box-shadow: 0 4px 12px rgba(231, 76, 60, 0.4);
 }
 
 QLabel#toastText {
     color: #1A1A2E;
     font-weight: 600;
     font-size: 14px;
-    letter-spacing: 0.5px;
 }
 
 /* ========================================
@@ -531,7 +494,6 @@ QDialog {
     background-color: #FFFFFF;
     border-radius: 16px;
     border: 1px solid #E8ECF1;
-    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.2);
 }
 
 QLabel#dialogTitle {
@@ -539,13 +501,11 @@ QLabel#dialogTitle {
     font-size: 20pt;
     font-weight: bold;
     margin-bottom: 10px;
-    letter-spacing: 2px;
 }
 
 QLabel#dialogBody {
     color: #4B5563;
     font-size: 12pt;
-    line-height: 1.7;
 }
 
 QLabel#dialogHint {
@@ -558,14 +518,12 @@ QFrame#detailMeta {
     border: 1px solid #E8ECF1;
     border-radius: 10px;
     padding: 20px;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
 }
 
 QLabel#metaLabel {
     color: #9CA3AF;
     font-size: 10pt;
     font-weight: bold;
-    letter-spacing: 1px;
 }
 
 QLabel#metaValue {
@@ -581,7 +539,6 @@ QLabel#pageTitle {
     color: #1A1A2E;
     font-size: 24pt;
     font-weight: bold;
-    letter-spacing: 2px;
     margin-bottom: 8px;
 }
 
@@ -589,7 +546,6 @@ QLabel#sectionTitle {
     color: #1A1A2E;
     font-size: 18pt;
     font-weight: bold;
-    letter-spacing: 1px;
     margin-bottom: 6px;
 }
 
@@ -597,20 +553,17 @@ QLabel#cardTitle {
     color: #1A1A2E;
     font-size: 16pt;
     font-weight: bold;
-    letter-spacing: 0.5px;
 }
 
 QLabel#mutedText {
     color: #6B7280;
     font-size: 14px;
-    line-height: 1.6;
 }
 
 QLabel#priceText {
     color: #C9A962;
     font-size: 18pt;
     font-weight: bold;
-    letter-spacing: 1px;
 }
 
 /* ========================================

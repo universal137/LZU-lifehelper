@@ -1578,25 +1578,30 @@ class MainWindow(QMainWindow):
             [[r["name"], r["location"], r["slot_date"], r["slot_time"], STATUS_LABELS.get(r["status"], r["status"])] for r in self.booking_rows],
             4,
         )
-        # 为场馆表格第一列添加场馆图标
-        venue_icons = {"羽毛球场": "🏸", "篮球场": "🏀", "足球场": "⚽", "游泳池": "🏊", "乒乓球室": "🏓", "网球场": "🎾"}
+        # 为场馆表格第一列添加场馆图标（缓存避免重复创建）
+        venue_emoji_map = {"羽毛球场": "🏸", "篮球场": "🏀", "足球场": "⚽", "游泳池": "🏊", "乒乓球室": "🏓", "网球场": "🎾"}
+        if not hasattr(self, "_venue_icon_cache"):
+            self._venue_icon_cache: dict[str, QPixmap] = {}
         for row in range(self.slot_table.rowCount()):
             item = self.slot_table.item(row, 0)
             if item:
                 venue_name = item.text()
                 emoji = "🏟️"
-                for key, e in venue_icons.items():
+                for key, e in venue_emoji_map.items():
                     if key in venue_name:
                         emoji = e
                         break
-                ic = QPixmap(24, 24)
-                ic.fill(QColor("#10B981"))
-                p = QPainter(ic)
-                p.setRenderHint(QPainter.Antialiasing)
-                p.setPen(QColor("#FFFFFF"))
-                p.setFont(QFont("Segoe UI Emoji", 14))
-                p.drawText(ic.rect(), Qt.AlignCenter, emoji)
-                p.end()
+                if emoji not in self._venue_icon_cache:
+                    ic = QPixmap(24, 24)
+                    ic.fill(QColor("#10B981"))
+                    p = QPainter(ic)
+                    p.setRenderHint(QPainter.Antialiasing)
+                    p.setPen(QColor("#FFFFFF"))
+                    p.setFont(QFont("Segoe UI Emoji", 14))
+                    p.drawText(ic.rect(), Qt.AlignCenter, emoji)
+                    p.end()
+                    self._venue_icon_cache[emoji] = ic
+                item.setIcon(self._venue_icon_cache[emoji])
                 item.setIcon(ic)
 
     def capture_slot_selection(self) -> None:
@@ -1650,19 +1655,21 @@ class MainWindow(QMainWindow):
             [[r["route_name"], r["from_campus"], r["to_campus"], r["station"], r["departure_time"], str(r["seats_left"])] for r in self.bus_rows],
             seat_column=5,
         )
-        # 为校车表格第一列添加巴士图标
-        bus_icon = QPixmap(24, 24)
-        bus_icon.fill(QColor("#3B82F6"))
-        bp = QPainter(bus_icon)
-        bp.setRenderHint(QPainter.Antialiasing)
-        bp.setPen(QColor("#FFFFFF"))
-        bp.setFont(QFont("Segoe UI Emoji", 14))
-        bp.drawText(bus_icon.rect(), Qt.AlignCenter, "🚌")
-        bp.end()
+        # 为校车表格第一列添加巴士图标（缓存）
+        if not hasattr(self, "_bus_icon_cache"):
+            bi = QPixmap(24, 24)
+            bi.fill(QColor("#3B82F6"))
+            bp = QPainter(bi)
+            bp.setRenderHint(QPainter.Antialiasing)
+            bp.setPen(QColor("#FFFFFF"))
+            bp.setFont(QFont("Segoe UI Emoji", 14))
+            bp.drawText(bi.rect(), Qt.AlignCenter, "🚌")
+            bp.end()
+            self._bus_icon_cache = bi
         for row in range(self.bus_table.rowCount()):
             item = self.bus_table.item(row, 0)
             if item:
-                item.setIcon(bus_icon)
+                item.setIcon(self._bus_icon_cache)
         tickets = self.model.list_my_tickets()
         if tickets:
             tickets_html = "".join(
@@ -1818,12 +1825,15 @@ class MainWindow(QMainWindow):
         self.show_toast(f"名单已导出：{target}" if target else "导出失败", bool(target))
 
     def refresh_moments(self) -> None:
+        # 记住当前选中项
+        prev_id = self.current_moment_id
         self.moment_rows = self.model.list_moments(self.moment_category.currentText())
+        self.moment_list.blockSignals(True)
         self.moment_list.clear()
-        for row in self.moment_rows:
+        restore_row = 0
+        for idx, row in enumerate(self.moment_rows):
             item = QListWidgetItem(f"[{row['category']}] {row['display_name']}  {row['created_at']}\n♥ {row['like_count']}   评论 {row['comment_count']}\n{row['content'][:70]}")
             item.setData(Qt.UserRole, row["id"])
-            # 添加分类图标
             img_file = MOMENT_CATEGORY_IMAGES.get(row["category"], "")
             if img_file:
                 img_path = ASSETS_DIR / img_file
@@ -1831,8 +1841,13 @@ class MainWindow(QMainWindow):
                     pix = QPixmap(str(img_path)).scaled(48, 48, Qt.KeepAspectRatioByExpanding, Qt.SmoothTransformation)
                     item.setIcon(pix)
             self.moment_list.addItem(item)
+            if prev_id is not None and row["id"] == prev_id:
+                restore_row = idx
         if self.moment_rows:
-            self.moment_list.setCurrentRow(0)
+            self.moment_list.setCurrentRow(restore_row)
+        self.moment_list.blockSignals(False)
+        if self.moment_rows:
+            self.open_moment_detail()
         else:
             self.current_moment_id = None
             self.moment_detail.clear()

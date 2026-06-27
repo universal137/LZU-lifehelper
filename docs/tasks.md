@@ -187,4 +187,13 @@ Task 7 (5min) → Task 3 (30min) → Task 5 (30min) → Task 2 (1h)
 - [x] A3: CSV导出修复（手动拼接 → csv 模块）
 - [x] A3: 图片上传校验（文件魔数 + 5MB 大小限制）
 
+---
+
+## 第三阶段：性能+打磨（P2）
+
+- [x] B2: QSS清理（移除47行无效CSS属性：box-shadow/text-shadow/letter-spacing/line-height/text-transform/show-grid）
+- [x] C1: 数据库连接优化（启用 WAL journal_mode，提升并发读性能）
+- [x] C1: 图标缓存（场馆emoji图标+校车图标缓存到类变量，避免每次刷新重复创建QPixmap）
+- [x] C1: 刷新去重（moment列表刷新时恢复之前的选中位置，blockSignals避免触发不必要的二次查询）
+
 先修快速可见的 bug，再做安全加固，最后做架构级迁移。
