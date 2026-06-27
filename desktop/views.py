@@ -1550,6 +1550,17 @@ class MainWindow(QMainWindow):
         dau_layout.addWidget(self.admin_dau_chart)
         trend2_row.addWidget(dau_card, 1)
         layout.addLayout(trend2_row, 1)
+        # 系统健康面板
+        health_card = card_frame()
+        health_layout = QVBoxLayout(health_card)
+        health_title = QLabel("系统健康状态")
+        health_title.setObjectName("sectionTitle")
+        self.admin_health_text = QTextEdit()
+        self.admin_health_text.setReadOnly(True)
+        self.admin_health_text.setMaximumHeight(120)
+        health_layout.addWidget(health_title)
+        health_layout.addWidget(self.admin_health_text)
+        layout.addWidget(health_card)
         return page
 
     def _build_admin_users(self) -> QWidget:
@@ -1765,7 +1776,29 @@ class MainWindow(QMainWindow):
         self.refresh_activities()
         self.refresh_moments()
         self.refresh_profile()
+        self._update_nav_badges()
         self._hide_loading(overlay)
+
+    def _update_nav_badges(self) -> None:
+        """更新导航栏通知徽章"""
+        if not self.user_nav:
+            return
+        summary = self.model.dashboard_summary()
+        badges = {
+            1: summary["totals"].get("products", 0),   # 二手市场
+            2: summary["totals"].get("bookings", 0),    # 场馆预约
+            3: summary["totals"].get("tickets", 0),     # 校园出行
+            4: summary["totals"].get("activities", 0),  # 活动中心
+        }
+        nav_labels = ["🏠 首页概览", "🛍 二手市场", "🏸 场馆预约", "🚌 校园出行", "🎉 活动中心", "💬 生活圈", "👤 个人中心"]
+        for idx in range(self.user_nav.count()):
+            item = self.user_nav.item(idx)
+            base = nav_labels[idx] if idx < len(nav_labels) else ""
+            count = badges.get(idx, 0)
+            if count > 0 and idx in badges:
+                item.setText(f"{base}  ({count})")
+            else:
+                item.setText(base)
 
     def refresh_home(self) -> None:
         summary = self.model.dashboard_summary()
@@ -1894,6 +1927,19 @@ class MainWindow(QMainWindow):
             ("发布时间", detail["created_at"]),
         ])
         dialog.add_section("商品描述", detail["description"], 80)
+        # 相似商品推荐
+        similar = self.model.list_products(category=detail["category"])
+        similar = [s for s in similar if s["id"] != product_id][:3]
+        if similar:
+            similar_html = "".join(
+                f'<div style="border-bottom:1px solid #E8ECF1; padding:6px 0;">'
+                f'<b style="color:#C9A962;">{esc(s["title"])}</b> '
+                f'<span style="color:#E74C3C;">¥{s["price"]:.0f}</span> '
+                f'<span style="color:#9CA3AF; font-size:12px;">{esc(s["seller_name"])}</span></div>'
+                for s in similar
+            )
+            box = dialog.add_section("同类推荐", "", 80)
+            box.setHtml(similar_html)
         if detail["messages"]:
             messages_html = "".join(
                 f'<div style="border-bottom:1px solid #E8ECF1; padding:8px 0;">'
@@ -2413,7 +2459,16 @@ class MainWindow(QMainWindow):
             f'<div style="margin-top:16px;"><div style="font-weight:bold; color:#C9A962; margin-bottom:8px;">🏸 预约记录</div>'
             f'{bookings_html}</div>'
             f'<div style="margin-top:16px;"><div style="font-weight:bold; color:#C9A962; margin-bottom:8px;">🚌 车票记录</div>'
-            f'{tickets_html}</div></div>'
+            f'{tickets_html}</div>'
+            # 活动时间线
+            f'<div style="margin-top:16px;"><div style="font-weight:bold; color:#C9A962; margin-bottom:8px;">📊 账户概览</div>'
+            f'<table style="width:100%; font-size:13px; background:#FAFBFD; border-radius:8px; padding:12px;">'
+            f'<tr><td style="padding:6px 12px; color:#6B7280;">注册时间</td><td style="padding:6px 0; font-weight:bold;">{esc(user["created_at"])}</td></tr>'
+            f'<tr><td style="padding:6px 12px; color:#6B7280;">在售商品</td><td style="padding:6px 0; font-weight:bold; color:#C9A962;">{data["product_count"]} 件</td></tr>'
+            f'<tr><td style="padding:6px 12px; color:#6B7280;">生活圈动态</td><td style="padding:6px 0; font-weight:bold; color:#C9A962;">{data["moment_count"]} 条</td></tr>'
+            f'<tr><td style="padding:6px 12px; color:#6B7280;">有效预约</td><td style="padding:6px 0; font-weight:bold; color:#27AE60;">{active_bookings} 个</td></tr>'
+            f'<tr><td style="padding:6px 12px; color:#6B7280;">有效车票</td><td style="padding:6px 0; font-weight:bold; color:#3B82F6;">{active_tickets} 张</td></tr>'
+            f'</table></div></div>'
         )
 
     def change_password(self) -> None:
@@ -2460,6 +2515,17 @@ class MainWindow(QMainWindow):
         self.admin_booking_trend.set_data(summary.get("booking_trend", []))
         dau_data = summary.get("dau_trend", [])
         self.admin_dau_chart.set_data([{"name": label, "total": count} for label, count in dau_data])
+        # 系统健康面板
+        health = summary.get("health", {})
+        health_html = (
+            f'<table style="width:100%; font-size:13px;"><tr>'
+            f'<td style="padding:4px 12px;">💾 数据库: <b>{health.get("db_size_kb", 0)} KB</b></td>'
+            f'<td style="padding:4px 12px;">👥 用户: <b>{health.get("total_users", 0)}</b> (封禁 {health.get("banned_users", 0)})</td>'
+            f'<td style="padding:4px 12px;">📦 商品: <b>{health.get("total_products", 0)}</b> (下架 {health.get("removed_products", 0)})</td>'
+            f'<td style="padding:4px 12px;">📋 预约: <b>{health.get("total_bookings", 0)}</b></td>'
+            f'</tr></table>'
+        )
+        self.admin_health_text.setHtml(health_html)
 
     def capture_admin_selection(self, key: str, rows: list[dict], table: QTableWidget) -> None:
         row = table.currentRow()

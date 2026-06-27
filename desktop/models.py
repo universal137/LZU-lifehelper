@@ -1266,6 +1266,13 @@ class AppModel:
                 ).fetchone()[0]
                 label = (date.today() - timedelta(days=i)).strftime("%m/%d")
                 dau_trend.append((label, count))
+            # 系统健康数据
+            db_size = conn.execute("SELECT page_count * page_size FROM pragma_page_count(), pragma_page_size()").fetchone()[0]
+            total_users = totals["users"]
+            total_products = totals["products"]
+            total_bookings = totals["total_bookings"]
+            banned_users = conn.execute("SELECT COUNT(*) FROM users WHERE status = 'banned'").fetchone()[0]
+            removed_products = conn.execute("SELECT COUNT(*) FROM products WHERE status = 'removed'").fetchone()[0]
         return {
             "totals": totals,
             "venue_hot": [dict(row) for row in venue_hot],
@@ -1274,6 +1281,14 @@ class AppModel:
             "cat_dist": [(row["category"], row["cnt"]) for row in cat_dist],
             "booking_trend": booking_trend,
             "dau_trend": dau_trend,
+            "health": {
+                "db_size_kb": db_size // 1024,
+                "total_users": total_users,
+                "banned_users": banned_users,
+                "total_products": total_products,
+                "removed_products": removed_products,
+                "total_bookings": total_bookings,
+            },
         }
 
     def admin_users(self) -> list[dict[str, Any]]:
