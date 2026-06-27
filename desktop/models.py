@@ -1248,6 +1248,24 @@ class AppModel:
                 ).fetchone()[0]
                 label = (date.today() - timedelta(days=i)).strftime("%m/%d")
                 booking_trend.append((label, count))
+            # 近7天日活跃用户（通过admin_logs和 bookings/moments 活动推断）
+            dau_trend = []
+            for i in range(6, -1, -1):
+                day = (date.today() - timedelta(days=i)).strftime("%Y-%m-%d")
+                count = conn.execute(
+                    """
+                    SELECT COUNT(DISTINCT user_id) FROM (
+                        SELECT user_id FROM bookings WHERE created_at LIKE ? AND status = 'active'
+                        UNION
+                        SELECT user_id FROM moments WHERE created_at LIKE ? AND status = 'normal'
+                        UNION
+                        SELECT seller_id FROM products WHERE created_at LIKE ? AND status = 'normal'
+                    )
+                    """,
+                    (day + "%", day + "%", day + "%"),
+                ).fetchone()[0]
+                label = (date.today() - timedelta(days=i)).strftime("%m/%d")
+                dau_trend.append((label, count))
         return {
             "totals": totals,
             "venue_hot": [dict(row) for row in venue_hot],
@@ -1255,6 +1273,7 @@ class AppModel:
             "reg_trend": reg_trend,
             "cat_dist": [(row["category"], row["cnt"]) for row in cat_dist],
             "booking_trend": booking_trend,
+            "dau_trend": dau_trend,
         }
 
     def admin_users(self) -> list[dict[str, Any]]:

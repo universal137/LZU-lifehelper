@@ -1530,6 +1530,9 @@ class MainWindow(QMainWindow):
         charts_row.addWidget(pie_card, 1)
         layout.addLayout(charts_row, 1)
         # 预约趋势图
+        # 预约趋势 + 日活跃用户（左右布局）
+        trend2_row = QHBoxLayout()
+        trend2_row.setSpacing(16)
         booking_trend_card = card_frame()
         booking_trend_layout = QVBoxLayout(booking_trend_card)
         booking_trend_title = QLabel("近7天预约趋势")
@@ -1537,7 +1540,16 @@ class MainWindow(QMainWindow):
         self.admin_booking_trend = LineChart()
         booking_trend_layout.addWidget(booking_trend_title)
         booking_trend_layout.addWidget(self.admin_booking_trend)
-        layout.addWidget(booking_trend_card, 1)
+        trend2_row.addWidget(booking_trend_card, 1)
+        dau_card = card_frame()
+        dau_layout = QVBoxLayout(dau_card)
+        dau_title = QLabel("近7天活跃用户")
+        dau_title.setObjectName("sectionTitle")
+        self.admin_dau_chart = BarChart()
+        dau_layout.addWidget(dau_title)
+        dau_layout.addWidget(self.admin_dau_chart)
+        trend2_row.addWidget(dau_card, 1)
+        layout.addLayout(trend2_row, 1)
         return page
 
     def _build_admin_users(self) -> QWidget:
@@ -2446,6 +2458,8 @@ class MainWindow(QMainWindow):
         self.admin_trend_chart.set_data(summary.get("reg_trend", []))
         self.admin_pie_chart.set_data(summary.get("cat_dist", []))
         self.admin_booking_trend.set_data(summary.get("booking_trend", []))
+        dau_data = summary.get("dau_trend", [])
+        self.admin_dau_chart.set_data([{"name": label, "total": count} for label, count in dau_data])
 
     def capture_admin_selection(self, key: str, rows: list[dict], table: QTableWidget) -> None:
         row = table.currentRow()
