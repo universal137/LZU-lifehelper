@@ -1271,12 +1271,17 @@ class MainWindow(QMainWindow):
         self.market_category.setMinimumWidth(120)
         self.market_category.addItems(self.model.product_categories())
         self.market_category.currentTextChanged.connect(lambda: self.refresh_market())
+        self.market_sort = QComboBox()
+        self.market_sort.setMinimumWidth(100)
+        self.market_sort.addItems(["最新发布", "价格低→高", "价格高→低"])
+        self.market_sort.currentTextChanged.connect(lambda: self.refresh_market())
         search = set_secondary(QPushButton("筛选"))
         search.clicked.connect(self.refresh_market)
         publish = set_primary(QPushButton("发布商品"))
         publish.clicked.connect(self.open_product_dialog)
         tools.addWidget(self.market_keyword, 1)
         tools.addWidget(self.market_category)
+        tools.addWidget(self.market_sort)
         tools.addWidget(search)
         tools.addWidget(publish)
         layout.addLayout(tools)
@@ -1377,7 +1382,7 @@ class MainWindow(QMainWindow):
         tools.addWidget(publish)
         tools.addWidget(export)
         layout.addLayout(tools)
-        self.activity_table = self._table(["标题", "分类", "组织者", "时间", "地点", "余位", "状态"])
+        self.activity_table = self._table(["标题", "分类", "组织者", "时间", "地点", "余位", "状态", "倒计时"])
         self.activity_table.itemSelectionChanged.connect(self.open_activity_detail)
         self.activity_detail = QTextEdit()
         self.activity_detail.setReadOnly(True)
@@ -1606,7 +1611,7 @@ class MainWindow(QMainWindow):
         tools.addWidget(ban)
         tools.addWidget(unban)
         layout.addLayout(tools)
-        self.admin_user_table = self._table(["账号", "姓名", "身份", "状态", "学院/单位", "创建时间"])
+        self.admin_user_table = self._table(["账号", "姓名", "身份", "状态", "学院/单位", "创建时间", "最后活跃"])
         self.admin_user_table.itemSelectionChanged.connect(lambda: self.capture_admin_selection("user", self.admin_user_rows, self.admin_user_table))
         layout.addWidget(self.admin_user_table, 1)
         return page
@@ -1851,6 +1856,12 @@ class MainWindow(QMainWindow):
 
     def refresh_market(self) -> None:
         self.market_rows = self.model.list_products(self.market_keyword.text().strip(), self.market_category.currentText())
+        # 排序
+        sort_text = self.market_sort.currentText() if hasattr(self, "market_sort") else "最新发布"
+        if sort_text == "价格低→高":
+            self.market_rows.sort(key=lambda x: x["price"])
+        elif sort_text == "价格高→低":
+            self.market_rows.sort(key=lambda x: x["price"], reverse=True)
         self.clear_grid(self.market_grid)
         for index, product in enumerate(self.market_rows):
             card = card_frame()
@@ -2204,9 +2215,28 @@ class MainWindow(QMainWindow):
 
     def refresh_activities(self) -> None:
         self.activity_rows = self.model.list_activities(self.activity_category.currentText())
+        # 添加倒计时信息
+        now = datetime.now()
+        table_rows = []
+        for r in self.activity_rows:
+            countdown = ""
+            try:
+                event_time = datetime.strptime(r["start_time"], "%Y-%m-%d %H:%M")
+                diff = (event_time - now).total_seconds()
+                if diff < 0:
+                    countdown = "已结束"
+                elif diff < 3600:
+                    countdown = f"⏳ {int(diff // 60)}分钟后"
+                elif diff < 86400:
+                    countdown = f"🕐 {int(diff // 3600)}小时后"
+                else:
+                    countdown = f"📅 {int(diff // 86400)}天后"
+            except (ValueError, TypeError):
+                pass
+            table_rows.append([r["title"], r["category"], r["organizer_name"], r["start_time"], r["location"], str(r["seats_left"]), STATUS_LABELS.get(r["status"], r["status"]), countdown])
         self.fill_table(
             self.activity_table,
-            [[r["title"], r["category"], r["organizer_name"], r["start_time"], r["location"], str(r["seats_left"]), STATUS_LABELS.get(r["status"], r["status"])] for r in self.activity_rows],
+            table_rows,
             6,
             seat_column=5,
         )
@@ -2654,7 +2684,7 @@ class MainWindow(QMainWindow):
             rows = [r for r in rows if keyword in r["username"].lower() or keyword in r["display_name"].lower() or keyword in r["college"].lower()]
         self.fill_table(
             self.admin_user_table,
-            [[r["username"], r["display_name"], ROLE_LABELS.get(r["role"], r["role"]), STATUS_LABELS.get(r["status"], r["status"]), r["college"], r["created_at"]] for r in rows],
+            [[r["username"], r["display_name"], ROLE_LABELS.get(r["role"], r["role"]), STATUS_LABELS.get(r["status"], r["status"]), r["college"], r["created_at"], r.get("last_active", "")] for r in rows],
             3,
         )
 
@@ -2665,6 +2695,12 @@ class MainWindow(QMainWindow):
         if entity_id is None:
             self.show_toast(f"请先选择{entity_type}", False)
             return
+        # 危险操作二次确认
+        dangerous = any(kw in action_title for kw in ["封禁", "下架", "取消", "删除"])
+        if dangerous:
+            confirm = ConfirmDialog(self, f"确认{action_title}", f"确定要执行「{action_title}」操作吗？\n\n此操作需要管理员权限，请谨慎执行。", True)
+            if confirm.exec() != QDialog.Accepted:
+                return
         reason = ""
         if detail_text:
             dialog = ReasonDialog(self, action_title, detail_text, prompt)

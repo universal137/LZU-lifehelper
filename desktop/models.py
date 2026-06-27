@@ -1347,9 +1347,15 @@ class AppModel:
         with self.connect() as conn:
             rows = conn.execute(
                 """
-                SELECT id, username, display_name, role, status, college, created_at
-                FROM users
-                ORDER BY CASE role WHEN 'admin' THEN 0 WHEN 'teacher' THEN 1 ELSE 2 END, id ASC
+                SELECT u.id, u.username, u.display_name, u.role, u.status, u.college, u.created_at,
+                       COALESCE(
+                           (SELECT MAX(created_at) FROM products WHERE seller_id = u.id),
+                           (SELECT MAX(created_at) FROM moments WHERE user_id = u.id),
+                           (SELECT MAX(created_at) FROM bookings WHERE user_id = u.id),
+                           u.created_at
+                       ) AS last_active
+                FROM users u
+                ORDER BY CASE u.role WHEN 'admin' THEN 0 WHEN 'teacher' THEN 1 ELSE 2 END, u.id ASC
                 """
             ).fetchall()
         return [dict(row) for row in rows]
