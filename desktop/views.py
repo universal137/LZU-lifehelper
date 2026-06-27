@@ -401,6 +401,93 @@ class BarChart(QWidget):
         painter.end()
 
 
+class LineChart(QWidget):
+    """简单折线图，用于显示趋势数据"""
+    def __init__(self) -> None:
+        super().__init__()
+        self.data_points: list[tuple[str, int]] = []
+        self.setMinimumHeight(180)
+
+    def set_data(self, points: list[tuple[str, int]]) -> None:
+        self.data_points = points
+        self.update()
+
+    def paintEvent(self, event) -> None:
+        super().paintEvent(event)
+        from PySide6.QtGui import QLinearGradient, QPen, QPainterPath
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.Antialiasing)
+        rect = self.rect().adjusted(40, 16, -16, -30)
+        # 底部轴线
+        painter.setPen(QColor("#DEE2E6"))
+        painter.drawLine(rect.bottomLeft(), rect.bottomRight())
+        if len(self.data_points) < 2:
+            painter.setPen(QColor("#6C757D"))
+            painter.drawText(rect, Qt.AlignCenter, "暂无趋势数据")
+            painter.end()
+            return
+        max_val = max(v for _, v in self.data_points) or 1
+        # 水平参考线
+        grid_pen = QPen(QColor("#E8ECF1"), 1, Qt.DashLine)
+        painter.setPen(grid_pen)
+        for i in range(1, 5):
+            gy = rect.bottom() - int(rect.height() * i / 4)
+            painter.drawLine(int(rect.left()), gy, int(rect.right()), gy)
+            painter.setPen(QColor("#9CA3AF"))
+            painter.setFont(QFont("Microsoft YaHei", 8))
+            painter.drawText(QRectF(0, gy - 10, 36, 20), Qt.AlignRight | Qt.AlignVCenter, str(int(max_val * i / 4)))
+            painter.setPen(grid_pen)
+        # 计算点位
+        points = []
+        n = len(self.data_points)
+        step = rect.width() / (n - 1) if n > 1 else 0
+        for i, (label, value) in enumerate(self.data_points):
+            x = rect.left() + int(i * step)
+            y = rect.bottom() - int(rect.height() * (value / max_val))
+            points.append((x, y, label, value))
+        # 绘制渐变填充区域
+        path = QPainterPath()
+        path.moveTo(points[0][0], rect.bottom())
+        for x, y, _, _ in points:
+            path.lineTo(x, y)
+        path.lineTo(points[-1][0], rect.bottom())
+        path.closeSubpath()
+        fill_grad = QLinearGradient(0, rect.top(), 0, rect.bottom())
+        fill_grad.setColorAt(0, QColor(201, 169, 98, 60))
+        fill_grad.setColorAt(1, QColor(201, 169, 98, 5))
+        painter.setBrush(fill_grad)
+        painter.setPen(Qt.NoPen)
+        painter.drawPath(path)
+        # 绘制折线
+        line_pen = QPen(QColor("#C9A962"), 3, Qt.SolidLine, Qt.RoundCap, Qt.RoundJoin)
+        painter.setPen(line_pen)
+        painter.setBrush(Qt.NoBrush)
+        path_line = QPainterPath()
+        path_line.moveTo(points[0][0], points[0][1])
+        for x, y, _, _ in points[1:]:
+            path_line.lineTo(x, y)
+        painter.drawPath(path_line)
+        # 绘制数据点
+        for x, y, label, value in points:
+            painter.setBrush(QColor("#FFFFFF"))
+            painter.setPen(QPen(QColor("#C9A962"), 2))
+            painter.drawEllipse(x - 5, y - 5, 10, 10)
+            # 数值标签
+            painter.setPen(QColor("#1A1A2E"))
+            painter.setFont(QFont("Microsoft YaHei", 8, QFont.Bold))
+            painter.drawText(QRectF(x - 15, y - 22, 30, 16), Qt.AlignCenter, str(value))
+        # X轴标签
+        painter.setPen(QColor("#6C757D"))
+        painter.setFont(QFont("Microsoft YaHei", 8))
+        label_step = max(1, len(points) // 6)
+        for i, (x, _, label, _) in enumerate(points):
+            if i % label_step == 0 or i == len(points) - 1:
+                metrics = painter.fontMetrics()
+                elided = metrics.elidedText(label, Qt.ElideRight, 50)
+                painter.drawText(QRectF(x - 25, rect.bottom() + 4, 50, 20), Qt.AlignCenter, elided)
+        painter.end()
+
+
 class FormDialog(QDialog):
     """通用表单对话框：接受字段配置列表，自动生成表单。
 
@@ -1367,6 +1454,15 @@ class MainWindow(QMainWindow):
         self.admin_recent_logs.setReadOnly(True)
         bottom.addWidget(self._text_card("最近管理操作", self.admin_recent_logs), 1)
         layout.addLayout(bottom, 1)
+        # 用户注册趋势图
+        trend_card = card_frame()
+        trend_layout = QVBoxLayout(trend_card)
+        trend_title = QLabel("近7天用户注册趋势")
+        trend_title.setObjectName("sectionTitle")
+        self.admin_trend_chart = LineChart()
+        trend_layout.addWidget(trend_title)
+        trend_layout.addWidget(self.admin_trend_chart)
+        layout.addWidget(trend_card, 1)
         return page
 
     def _build_admin_users(self) -> QWidget:
@@ -2272,6 +2368,7 @@ class MainWindow(QMainWindow):
         else:
             logs_html = '<div style="color:#9CA3AF; padding:20px; text-align:center;">暂无操作日志</div>'
         self.admin_recent_logs.setHtml(logs_html)
+        self.admin_trend_chart.set_data(summary.get("reg_trend", []))
 
     def capture_admin_selection(self, key: str, rows: list[dict], table: QTableWidget) -> None:
         row = table.currentRow()

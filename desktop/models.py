@@ -1221,10 +1221,21 @@ class AppModel:
                 ORDER BY l.id DESC LIMIT 8
                 """
             ).fetchall()
+            # 近7天用户注册趋势
+            reg_trend = []
+            for i in range(6, -1, -1):
+                day = (date.today() - timedelta(days=i)).strftime("%Y-%m-%d")
+                count = conn.execute(
+                    "SELECT COUNT(*) FROM users WHERE created_at LIKE ?",
+                    (day + "%",),
+                ).fetchone()[0]
+                label = (date.today() - timedelta(days=i)).strftime("%m/%d")
+                reg_trend.append((label, count))
         return {
             "totals": totals,
             "venue_hot": [dict(row) for row in venue_hot],
             "recent_logs": [dict(row) for row in recent_logs],
+            "reg_trend": reg_trend,
         }
 
     def admin_users(self) -> list[dict[str, Any]]:
