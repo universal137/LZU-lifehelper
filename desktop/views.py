@@ -2,7 +2,10 @@ from __future__ import annotations
 
 from datetime import datetime
 import html as _html
+import logging
 from pathlib import Path
+
+logger = logging.getLogger("lzu_lifehelper.views")
 
 
 def esc(text) -> str:
@@ -759,10 +762,21 @@ class DetailDialog(QDialog):
     def __init__(self, parent: QWidget, title: str, subtitle: str = "", status_text: str = "", status: str = "normal") -> None:
         super().__init__(parent)
         self.setWindowTitle(title)
-        self.resize(720, 560)
+        self.resize(720, 600)
+        self.setMinimumSize(600, 400)
         self._setup_open_animation()
-        self.root = QVBoxLayout(self)
-        self.root.setContentsMargins(20, 20, 20, 20)
+        main_layout = QVBoxLayout(self)
+        main_layout.setContentsMargins(0, 0, 0, 0)
+        main_layout.setSpacing(0)
+        # 可滚动内容区
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.NoFrame)
+        scroll.setStyleSheet("QScrollArea { border: none; background: transparent; }")
+        content_widget = QWidget()
+        content_widget.setStyleSheet("background: transparent;")
+        self.root = QVBoxLayout(content_widget)
+        self.root.setContentsMargins(20, 20, 20, 10)
         self.root.setSpacing(14)
         header = QHBoxLayout()
         title_box = QVBoxLayout()
@@ -777,6 +791,13 @@ class DetailDialog(QDialog):
         if status_text:
             header.addWidget(status_badge(status_text, status))
         self.root.addLayout(header)
+        scroll.setWidget(content_widget)
+        main_layout.addWidget(scroll, 1)
+        # 固定底部按钮区
+        self._actions_widget = QWidget()
+        self._actions_layout = QHBoxLayout(self._actions_widget)
+        self._actions_layout.setContentsMargins(20, 10, 20, 20)
+        main_layout.addWidget(self._actions_widget)
 
     def add_meta_grid(self, items: list[tuple[str, str]]) -> None:
         frame = QFrame()
@@ -809,14 +830,16 @@ class DetailDialog(QDialog):
         self.root.addWidget(box)
         return box
 
-    def add_actions(self, actions: list[tuple[str, callable, str]]) -> None:
-        buttons = QHBoxLayout()
-        buttons.addStretch(1)
-        for text, handler, tone in actions:
-            button = set_danger(QPushButton(text)) if tone == "danger" else set_primary(QPushButton(text)) if tone == "primary" else set_secondary(QPushButton(text))
-            button.clicked.connect(handler)
-            buttons.addWidget(button)
-        self.root.addLayout(buttons)
+    def add_actions(self, actions: list) -> None:
+        self._actions_layout.addStretch(1)
+        for item in actions:
+            if isinstance(item, QPushButton):
+                self._actions_layout.addWidget(item)
+            else:
+                text, handler, tone = item
+                button = set_danger(QPushButton(text)) if tone == "danger" else set_primary(QPushButton(text)) if tone == "primary" else set_secondary(QPushButton(text))
+                button.clicked.connect(handler)
+                self._actions_layout.addWidget(button)
 
     def _setup_open_animation(self) -> None:
         pass
@@ -1306,20 +1329,21 @@ class MainWindow(QMainWindow):
         self.market_keyword.textChanged.connect(lambda: self._search_timer.start())
         self.market_category = QComboBox()
         self.market_category.setMinimumWidth(120)
+        self.market_category.blockSignals(True)
         self.market_category.addItems(self.model.product_categories())
+        self.market_category.blockSignals(False)
         self.market_category.currentTextChanged.connect(lambda: self.refresh_market())
         self.market_sort = QComboBox()
         self.market_sort.setMinimumWidth(100)
+        self.market_sort.blockSignals(True)
         self.market_sort.addItems(["最新发布", "价格低→高", "价格高→低"])
+        self.market_sort.blockSignals(False)
         self.market_sort.currentTextChanged.connect(lambda: self.refresh_market())
-        search = set_secondary(QPushButton("筛选"))
-        search.clicked.connect(self.refresh_market)
         publish = set_primary(QPushButton("发布商品"))
         publish.clicked.connect(self.open_product_dialog)
         tools.addWidget(self.market_keyword, 1)
         tools.addWidget(self.market_category)
         tools.addWidget(self.market_sort)
-        tools.addWidget(search)
         tools.addWidget(publish)
         layout.addLayout(tools)
         self.market_grid = QGridLayout()
@@ -1334,15 +1358,19 @@ class MainWindow(QMainWindow):
         tools.setSpacing(12)
         self.booking_category = QComboBox()
         self.booking_category.setMinimumWidth(120)
+        self.booking_category.blockSignals(True)
         self.booking_category.addItems(self.model.venue_categories())
+        self.booking_category.blockSignals(False)
         # 日期快捷筛选
         self.booking_date = QComboBox()
         self.booking_date.setMinimumWidth(120)
         from datetime import date as _date, timedelta as _td
+        self.booking_date.blockSignals(True)
         self.booking_date.addItem("全部日期")
         for i in range(7):
             d = _date.today() + _td(days=i)
             self.booking_date.addItem(d.strftime("%m-%d ") + ["一", "二", "三", "四", "五", "六", "日"][d.weekday()])
+        self.booking_date.blockSignals(False)
         self.booking_date.currentTextChanged.connect(lambda: self.refresh_bookings())
         self.booking_category.currentTextChanged.connect(lambda: self.refresh_bookings())
         refresh = set_secondary(QPushButton("刷新"))
@@ -1374,7 +1402,10 @@ class MainWindow(QMainWindow):
         tools.setSpacing(12)
         self.bus_campus = QComboBox()
         self.bus_campus.setMinimumWidth(120)
+        self.bus_campus.blockSignals(True)
         self.bus_campus.addItems(["全部", "榆中校区", "城关校区"])
+        self.bus_campus.blockSignals(False)
+        self.bus_campus.currentTextChanged.connect(lambda: self.refresh_buses())
         self.bus_summary_label = QLabel("")
         self.bus_summary_label.setStyleSheet("color: #6B7280; font-size: 12px;")
         refresh = set_secondary(QPushButton("刷新"))
@@ -1406,7 +1437,10 @@ class MainWindow(QMainWindow):
         tools.setSpacing(12)
         self.activity_category = QComboBox()
         self.activity_category.setMinimumWidth(120)
+        self.activity_category.blockSignals(True)
         self.activity_category.addItems(self.model.activity_categories())
+        self.activity_category.blockSignals(False)
+        self.activity_category.currentTextChanged.connect(lambda: self.refresh_activities())
         refresh = set_secondary(QPushButton("刷新"))
         refresh.clicked.connect(self.refresh_activities)
         join = set_primary(QPushButton("报名活动"))
@@ -1436,7 +1470,10 @@ class MainWindow(QMainWindow):
         tools.setSpacing(12)
         self.moment_category = QComboBox()
         self.moment_category.setMinimumWidth(120)
+        self.moment_category.blockSignals(True)
         self.moment_category.addItems(self.model.moment_categories())
+        self.moment_category.blockSignals(False)
+        self.moment_category.currentTextChanged.connect(lambda: self.refresh_moments())
         self.moment_count_label = QLabel("")
         self.moment_count_label.setStyleSheet("color: #6B7280; font-size: 12px;")
         refresh = set_secondary(QPushButton("刷新"))
@@ -1543,11 +1580,16 @@ class MainWindow(QMainWindow):
 
     def _build_admin_overview(self) -> QWidget:
         page, layout = self._content_page("数据总览", "系统后台核心指标与场馆预约热度。")
-        # 第一行KPI
-        cards = QHBoxLayout()
+        # KPI卡片 3列布局
+        cards_grid = QGridLayout()
+        cards_grid.setSpacing(8)
+        cards_grid.setColumnStretch(0, 1)
+        cards_grid.setColumnStretch(1, 1)
+        cards_grid.setColumnStretch(2, 1)
         self.admin_kpi_labels: dict[str, QLabel] = {}
         admin_kpi_colors = {"users": "teal", "today_bookings": "orange", "products": "blue", "moments": "purple", "activities": "green", "total_bookings": "red"}
-        for key, title in [("users", "👥 用户总数"), ("today_bookings", "📅 今日预约"), ("products", "📦 在售商品"), ("moments", "📝 动态数量"), ("activities", "🎉 活动总数"), ("total_bookings", "📋 总预约数")]:
+        kpi_items = [("users", "👥 用户总数"), ("today_bookings", "📅 今日预约"), ("products", "📦 在售商品"), ("moments", "📝 动态数量"), ("activities", "🎉 活动总数"), ("total_bookings", "📋 总预约数")]
+        for idx, (key, title) in enumerate(kpi_items):
             card = card_frame()
             card.setProperty("kpiColor", admin_kpi_colors.get(key, "blue"))
             c = QVBoxLayout(card)
@@ -1557,66 +1599,73 @@ class MainWindow(QMainWindow):
             v.setObjectName("kpiValue")
             c.addWidget(t)
             c.addWidget(v)
-            cards.addWidget(card)
+            cards_grid.addWidget(card, idx // 3, idx % 3)
             self.admin_kpi_labels[key] = v
-        layout.addLayout(cards)
-        # 图表 + 最近操作（左右布局）
-        bottom = QHBoxLayout()
-        bottom.setSpacing(16)
+        layout.addLayout(cards_grid)
+        # 图表区 3列布局
+        charts_grid = QGridLayout()
+        charts_grid.setSpacing(10)
+        charts_grid.setColumnStretch(0, 1)
+        charts_grid.setColumnStretch(1, 1)
+        charts_grid.setColumnStretch(2, 1)
+        # 行1: 场馆热度 + 用户注册趋势 + 商品分类饼图
         chart_card = card_frame()
         chart_layout = QVBoxLayout(chart_card)
+        chart_layout.setSpacing(4)
         title = QLabel("近一周场馆预约热度")
         title.setObjectName("sectionTitle")
         self.admin_chart = BarChart()
+        self.admin_chart.setMinimumHeight(130)
         chart_layout.addWidget(title)
         chart_layout.addWidget(self.admin_chart)
-        bottom.addWidget(chart_card, 1)
-        self.admin_recent_logs = QTextEdit()
-        self.admin_recent_logs.setReadOnly(True)
-        bottom.addWidget(self._text_card("最近管理操作", self.admin_recent_logs), 1)
-        layout.addLayout(bottom, 1)
-        # 用户注册趋势图
-        # 趋势图 + 饼图（左右布局）
-        charts_row = QHBoxLayout()
-        charts_row.setSpacing(16)
+        charts_grid.addWidget(chart_card, 0, 0)
         trend_card = card_frame()
         trend_layout = QVBoxLayout(trend_card)
+        trend_layout.setSpacing(4)
         trend_title = QLabel("近7天用户注册趋势")
         trend_title.setObjectName("sectionTitle")
         self.admin_trend_chart = LineChart()
+        self.admin_trend_chart.setMinimumHeight(130)
         trend_layout.addWidget(trend_title)
         trend_layout.addWidget(self.admin_trend_chart)
-        charts_row.addWidget(trend_card, 1)
+        charts_grid.addWidget(trend_card, 0, 1)
         pie_card = card_frame()
         pie_layout = QVBoxLayout(pie_card)
+        pie_layout.setSpacing(4)
         pie_title = QLabel("商品分类分布")
         pie_title.setObjectName("sectionTitle")
         self.admin_pie_chart = PieChart()
+        self.admin_pie_chart.setMinimumHeight(130)
         pie_layout.addWidget(pie_title)
         pie_layout.addWidget(self.admin_pie_chart)
-        charts_row.addWidget(pie_card, 1)
-        layout.addLayout(charts_row, 1)
-        # 预约趋势图
-        # 预约趋势 + 日活跃用户（左右布局）
-        trend2_row = QHBoxLayout()
-        trend2_row.setSpacing(16)
+        charts_grid.addWidget(pie_card, 0, 2)
+        # 行2: 预约趋势 + 日活跃用户 + 最近管理操作
         booking_trend_card = card_frame()
         booking_trend_layout = QVBoxLayout(booking_trend_card)
+        booking_trend_layout.setSpacing(4)
         booking_trend_title = QLabel("近7天预约趋势")
         booking_trend_title.setObjectName("sectionTitle")
         self.admin_booking_trend = LineChart()
+        self.admin_booking_trend.setMinimumHeight(130)
         booking_trend_layout.addWidget(booking_trend_title)
         booking_trend_layout.addWidget(self.admin_booking_trend)
-        trend2_row.addWidget(booking_trend_card, 1)
+        charts_grid.addWidget(booking_trend_card, 1, 0)
         dau_card = card_frame()
         dau_layout = QVBoxLayout(dau_card)
+        dau_layout.setSpacing(4)
         dau_title = QLabel("近7天活跃用户")
         dau_title.setObjectName("sectionTitle")
         self.admin_dau_chart = BarChart()
+        self.admin_dau_chart.setMinimumHeight(130)
         dau_layout.addWidget(dau_title)
         dau_layout.addWidget(self.admin_dau_chart)
-        trend2_row.addWidget(dau_card, 1)
-        layout.addLayout(trend2_row, 1)
+        charts_grid.addWidget(dau_card, 1, 1)
+        self.admin_recent_logs = QTextEdit()
+        self.admin_recent_logs.setReadOnly(True)
+        self.admin_recent_logs.setMaximumHeight(200)
+        log_card = self._text_card("最近管理操作", self.admin_recent_logs)
+        charts_grid.addWidget(log_card, 1, 2)
+        layout.addLayout(charts_grid, 1)
         # 系统健康面板
         health_card = card_frame()
         health_layout = QVBoxLayout(health_card)
@@ -1624,7 +1673,7 @@ class MainWindow(QMainWindow):
         health_title.setObjectName("sectionTitle")
         self.admin_health_text = QTextEdit()
         self.admin_health_text.setReadOnly(True)
-        self.admin_health_text.setMaximumHeight(120)
+        self.admin_health_text.setMaximumHeight(60)
         health_layout.addWidget(health_title)
         health_layout.addWidget(self.admin_health_text)
         layout.addWidget(health_card)

@@ -124,7 +124,7 @@ QFrame#cardFrame {
     background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #FFFFFF, stop:1 #FAFBFD);
     border: 2px solid #E8ECF1;
     border-radius: 14px;
-    padding: 18px;
+    padding: 12px 18px;
 }
 
 QFrame#cardFrame:hover {
@@ -338,7 +338,7 @@ QLabel#kpiTitle {
 
 QLabel#kpiValue {
     color: #C9A962;
-    font-size: 32pt;
+    font-size: 24pt;
     font-weight: bold;
 }
 
